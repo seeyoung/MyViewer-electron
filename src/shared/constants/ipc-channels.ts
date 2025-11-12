@@ -19,6 +19,9 @@ export const IMAGE_GENERATE_THUMBNAILS_BATCH = 'image:generate-thumbnails-batch'
 export const SESSION_GET = 'session:get';
 export const SESSION_UPDATE = 'session:update';
 
+// Filesystem helpers
+export const FS_STAT = 'fs:stat';
+
 // Bookmark operations
 export const BOOKMARKS_LIST = 'bookmarks:list';
 export const BOOKMARKS_CREATE = 'bookmarks:create';

@@ -9,6 +9,7 @@ import { useArchive } from './hooks/useArchive';
 import RecentSources from './components/home/RecentSources';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { SourceType } from '@shared/types/Source';
+import * as channels from '@shared/constants/ipc-channels';
 
 function App() {
   console.log('🚀 App component is rendering!');
@@ -100,9 +101,15 @@ function App() {
       if (files && files.length > 0) {
         const filePath = files[0].path;
         try {
-          await openArchive(filePath);
+          const statInfo = await window.electronAPI.invoke(channels.FS_STAT, { path: filePath });
+          const isDirectory = (statInfo as any)?.isDirectory;
+          if (isDirectory) {
+            await openFolder(filePath);
+          } else {
+            await openArchive(filePath);
+          }
         } catch (error) {
-          console.error('Failed to open dropped file:', error);
+          console.error('Failed to open dropped item:', error);
         }
       }
     };
