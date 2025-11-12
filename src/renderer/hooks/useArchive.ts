@@ -11,6 +11,7 @@ export function useArchive() {
   const setError = useViewerStore(state => state.setError);
   const navigateToPage = useViewerStore(state => state.navigateToPage);
   const setSession = useViewerStore(state => state.setSession);
+  const addRecentSource = useViewerStore(state => state.addRecentSource);
 
   const openArchive = useCallback(async (filePath: string, password?: string) => {
     setIsOpening(true);
@@ -45,6 +46,12 @@ export function useArchive() {
       });
       setImages(images);
       setSession(session);
+      addRecentSource({
+        id: archive.id,
+        type: SourceType.ARCHIVE,
+        path: archive.filePath,
+        label: archive.fileName,
+      });
 
       // Navigate to last viewed page (auto-resume)
       if (session && session.currentPageIndex !== undefined) {
@@ -59,7 +66,7 @@ export function useArchive() {
     } finally {
       setIsOpening(false);
     }
-  }, [setSource, setImages, setError, navigateToPage, setSession]);
+  }, [setSource, setImages, setError, navigateToPage, setSession, addRecentSource]);
 
   const openFolder = useCallback(async (folderPath: string) => {
     setIsOpening(true);
@@ -75,6 +82,7 @@ export function useArchive() {
       setSource(source);
       setImages(images);
       setSession(session);
+      addRecentSource(source);
 
       if (session && session.currentPageIndex !== undefined) {
         navigateToPage(session.currentPageIndex);
@@ -88,7 +96,7 @@ export function useArchive() {
     } finally {
       setIsOpening(false);
     }
-  }, [setSource, setImages, setError, navigateToPage, setSession]);
+  }, [setSource, setImages, setError, navigateToPage, setSession, addRecentSource]);
 
   const closeArchive = useCallback(async (archiveId: string) => {
     try {

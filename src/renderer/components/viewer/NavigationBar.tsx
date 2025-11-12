@@ -17,6 +17,8 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
   const fitMode = useViewerStore(state => state.fitMode);
   const setFitMode = useViewerStore(state => state.setFitMode);
   const isFullscreen = useViewerStore(state => state.isFullscreen);
+  const showFolderTree = useViewerStore(state => state.showFolderTree);
+  const toggleFolderTree = useViewerStore(state => state.toggleFolderTree);
 
   const totalPages = images.length;
   const currentPage = currentPageIndex + 1; // Display 1-based index
@@ -152,6 +154,14 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
         </div>
 
         <div className="fullscreen-controls">
+          <button
+            onClick={toggleFolderTree}
+            className={`panel-button ${showFolderTree ? 'active' : ''}`}
+            title="Toggle Folder Sidebar"
+          >
+            {showFolderTree ? 'Hide Folders' : 'Show Folders'}
+          </button>
+
           <button
             onClick={handleToggleAppFullscreen}
             className={`fullscreen-button ${isFullscreen ? 'active' : ''}`}
@@ -326,6 +336,22 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
         .fullscreen-button.active {
           background-color: #007acc;
           border-color: #007acc;
+        }
+
+        .panel-button {
+          padding: 0.4rem 0.75rem;
+          background-color: #3d3d3d;
+          color: #fff;
+          border: 1px solid #4d4d4d;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 0.8rem;
+          min-width: 120px;
+          transition: background-color 0.2s, border-color 0.2s;
+        }
+
+        .panel-button.active {
+          background-color: #555;
         }
       `}</style>
     </div>

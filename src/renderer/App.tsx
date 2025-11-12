@@ -2,10 +2,13 @@ import React, { useEffect, useState } from 'react';
 import ErrorBoundary from './components/shared/ErrorBoundary';
 import NavigationBar from './components/viewer/NavigationBar';
 import ImageViewer from './components/viewer/ImageViewer';
+import FolderSidebar from './components/viewer/FolderSidebar';
 import LoadingIndicator from './components/shared/LoadingIndicator';
 import { useViewerStore } from './store/viewerStore';
 import { useArchive } from './hooks/useArchive';
+import RecentSources from './components/home/RecentSources';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { SourceType } from '@shared/types/Source';
 
 function App() {
   console.log('🚀 App component is rendering!');
@@ -15,6 +18,9 @@ function App() {
   const error = useViewerStore(state => state.error);
   const isFullscreen = useViewerStore(state => state.isFullscreen);
   const setFullscreen = useViewerStore(state => state.setFullscreen);
+  const showFolderTree = useViewerStore(state => state.showFolderTree);
+  const recentSources = useViewerStore(state => state.recentSources);
+  const setRecentSources = useViewerStore(state => state.setRecentSources);
   const { openArchive, openFolder, isOpening } = useArchive();
   const [viewerSize, setViewerSize] = useState({ width: 800, height: 600 });
 
@@ -55,6 +61,24 @@ function App() {
       removeFolderListener();
     };
   }, [openArchive, openFolder]);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem('myviewer.recentSources');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setRecentSources(parsed);
+        }
+      } catch (error) {
+        console.error('Failed to parse recent sources from storage', error);
+      }
+    }
+  }, [setRecentSources]);
+
+  useEffect(() => {
+    window.localStorage.setItem('myviewer.recentSources', JSON.stringify(recentSources));
+  }, [recentSources]);
 
   useEffect(() => {
     const removeListener = window.electronAPI.on('window-fullscreen-changed', (fullscreenState: unknown) => {
@@ -131,6 +155,11 @@ function App() {
         {currentSource && <NavigationBar className={isFullscreen ? 'floating' : ''} />}
 
         <main className={`app-main ${isFullscreen ? 'fullscreen' : ''}`}>
+          <div className="viewer-layout">
+            {showFolderTree && currentSource && (
+              <FolderSidebar />
+            )}
+            <div className="viewer-content">
           {isOpening || isLoading ? (
             <LoadingIndicator message="Loading source..." />
           ) : error ? (
@@ -155,8 +184,20 @@ function App() {
                   Use File → Open Archive (Cmd+O), File → Open Folder (Cmd+Shift+O), or drag & drop
                 </p>
               </div>
+              <RecentSources
+                sources={recentSources}
+                onOpen={async (source) => {
+                  if (source.type === SourceType.FOLDER) {
+                    await openFolder(source.path);
+                  } else {
+                    await openArchive(source.path);
+                  }
+                }}
+              />
             </div>
           )}
+            </div>
+          </div>
         </main>
       </div>
     </ErrorBoundary>

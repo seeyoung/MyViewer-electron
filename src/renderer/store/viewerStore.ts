@@ -15,6 +15,7 @@ interface ViewerState {
   currentSource: SourceDescriptor | null;
   currentSession: ViewingSession | null;
   images: Image[];
+  recentSources: SourceDescriptor[];
 
   // Navigation state
   currentPageIndex: number;
@@ -54,8 +55,13 @@ interface ViewerState {
   setZoomLevel: (level: number) => void;
   setFitMode: (mode: FitMode) => void;
   setFullscreen: (fullscreen: boolean) => void;
+  setShowFolderTree: (visible: boolean) => void;
+  toggleFolderTree: () => void;
+  setActiveFolderId: (folderId: string | null) => void;
   setError: (error: string | null) => void;
   setLoading: (loading: boolean) => void;
+  setRecentSources: (sources: SourceDescriptor[]) => void;
+  addRecentSource: (source: SourceDescriptor) => void;
   reset: () => void;
 }
 
@@ -64,6 +70,7 @@ export const useViewerStore = create<ViewerState>((set) => ({
   currentSource: null,
   currentSession: null,
   images: [],
+  recentSources: [],
 
   currentPageIndex: 0,
   readingDirection: ReadingDirection.LTR,
@@ -107,9 +114,27 @@ export const useViewerStore = create<ViewerState>((set) => ({
 
   setFullscreen: (fullscreen) => set({ isFullscreen: fullscreen }),
 
+  setShowFolderTree: (visible) => set({ showFolderTree: visible }),
+
+  toggleFolderTree: () => set((state) => ({ showFolderTree: !state.showFolderTree })),
+
+  setActiveFolderId: (folderId) => set({ activeFolderId: folderId }),
+
   setError: (error) => set({ error }),
 
   setLoading: (loading) => set({ isLoading: loading }),
+
+  setRecentSources: (sources) => set({ recentSources: sources }),
+
+  addRecentSource: (source) =>
+    set((state) => {
+      const existing = state.recentSources.filter(
+        (item) => !(item.path === source.path && item.type === source.type)
+      );
+      return {
+        recentSources: [source, ...existing].slice(0, 10),
+      };
+    }),
 
   reset: () =>
     set({
@@ -131,5 +156,6 @@ export const useViewerStore = create<ViewerState>((set) => ({
       bookmarks: [],
       isLoading: false,
       error: null,
+      recentSources: [],
     }),
 }));
