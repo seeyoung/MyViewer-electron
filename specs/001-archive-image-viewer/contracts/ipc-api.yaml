@@ -1,0 +1,865 @@
+openapi: 3.0.0
+info:
+  title: Archive Image Viewer IPC API
+  description: |
+    Inter-Process Communication (IPC) contract between Electron main process and renderer process.
+    This API defines the message-passing interface for archive operations, image loading,
+    bookmarks, and session management.
+  version: 1.0.0
+  contact:
+    name: Archive Image Viewer Team
+
+# IPC channels are organized by domain
+tags:
+  - name: Archive Operations
+    description: Opening, closing, and querying archives
+  - name: Image Operations
+    description: Loading images, generating thumbnails
+  - name: Navigation
+    description: Page navigation and viewing control
+  - name: Bookmarks
+    description: Bookmark CRUD operations
+  - name: Session Management
+    description: Viewing session persistence and restoration
+  - name: Settings
+    description: User preferences and configuration
+
+components:
+  schemas:
+    # Core Data Models
+    Archive:
+      type: object
+      required: [id, filePath, fileName, format, fileSize, totalImageCount, isOpen]
+      properties:
+        id:
+          type: string
+          format: uuid
+        filePath:
+          type: string
+          description: Absolute path to archive file
+        fileName:
+          type: string
+        format:
+          type: string
+          enum: [zip, rar, 7z, tar, cbz, cbr]
+        fileSize:
+          type: integer
+          format: int64
+        isPasswordProtected:
+          type: boolean
+        totalImageCount:
+          type: integer
+        totalFileCount:
+          type: integer
+        rootFolder:
+          $ref: '#/components/schemas/FolderNode'
+        isOpen:
+          type: boolean
+        lastError:
+          type: string
+          nullable: true
+        openedAt:
+          type: integer
+          format: int64
+        lastAccessedAt:
+          type: integer
+          format: int64
+
+    Image:
+      type: object
+      required: [id, archiveId, pathInArchive, fileName, format, fileSize, globalIndex]
+      properties:
+        id:
+          type: string
+          format: uuid
+        archiveId:
+          type: string
+          format: uuid
+        pathInArchive:
+          type: string
+        fileName:
+          type: string
+        folderPath:
+          type: string
+        format:
+          type: string
+          enum: [jpeg, png, gif, bmp, tiff, webp, psd, unknown]
+        fileSize:
+          type: integer
+        dimensions:
+          $ref: '#/components/schemas/ImageDimensions'
+        globalIndex:
+          type: integer
+        folderIndex:
+          type: integer
+        isLoaded:
+          type: boolean
+        isCorrupted:
+          type: boolean
+        thumbnailPath:
+          type: string
+          nullable: true
+
+    ImageDimensions:
+      type: object
+      required: [width, height]
+      properties:
+        width:
+          type: integer
+        height:
+          type: integer
+
+    FolderNode:
+      type: object
+      required: [id, archiveId, path, name, totalImageCount, directImageCount, isExpanded]
+      properties:
+        id:
+          type: string
+          format: uuid
+        archiveId:
+          type: string
+          format: uuid
+        path:
+          type: string
+        name:
+          type: string
+        parentId:
+          type: string
+          format: uuid
+          nullable: true
+        childFolders:
+          type: array
+          items:
+            $ref: '#/components/schemas/FolderNode'
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/Image'
+        totalImageCount:
+          type: integer
+        directImageCount:
+          type: integer
+        isExpanded:
+          type: boolean
+
+    Bookmark:
+      type: object
+      required: [id, archivePath, pageIndex, note, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        archivePath:
+          type: string
+        imageId:
+          type: string
+          format: uuid
+          nullable: true
+        pageIndex:
+          type: integer
+        note:
+          type: string
+          maxLength: 500
+        thumbnailPath:
+          type: string
+          nullable: true
+        createdAt:
+          type: integer
+          format: int64
+        updatedAt:
+          type: integer
+          format: int64
+
+    ViewingSession:
+      type: object
+      required: [id, archiveId, archivePath, currentPageIndex, viewMode, zoomLevel, fitMode, rotation, readingDirection]
+      properties:
+        id:
+          type: string
+          format: uuid
+        archiveId:
+          type: string
+          format: uuid
+        archivePath:
+          type: string
+        currentPageIndex:
+          type: integer
+          minimum: 0
+        readingDirection:
+          type: string
+          enum: [ltr, rtl]
+          default: ltr
+        viewMode:
+          type: string
+          enum: [single, two_page]
+          default: single
+        zoomLevel:
+          type: number
+          format: float
+          minimum: 0.1
+          maximum: 10.0
+          default: 1.0
+        fitMode:
+          type: string
+          enum: [fit_width, fit_height, actual_size, custom]
+          default: fit_width
+        rotation:
+          type: integer
+          enum: [0, 90, 180, 270]
+          default: 0
+        showThumbnails:
+          type: boolean
+          default: true
+        showFolderTree:
+          type: boolean
+          default: false
+        showBookmarks:
+          type: boolean
+          default: false
+        activeFolderId:
+          type: string
+          format: uuid
+          nullable: true
+        searchQuery:
+          type: string
+          nullable: true
+        startedAt:
+          type: integer
+          format: int64
+        lastActivityAt:
+          type: integer
+          format: int64
+
+    Thumbnail:
+      type: object
+      required: [id, imageId, cacheKey, cachePath, width, height, format, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        imageId:
+          type: string
+          format: uuid
+        cacheKey:
+          type: string
+        cachePath:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+        format:
+          type: string
+          enum: [jpeg, webp]
+        fileSize:
+          type: integer
+        status:
+          type: string
+          enum: [pending, generating, ready, failed]
+        generatedAt:
+          type: integer
+          format: int64
+          nullable: true
+        lastAccessedAt:
+          type: integer
+          format: int64
+        error:
+          type: string
+          nullable: true
+
+    # Request/Response Types
+    ErrorResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          description: Error code (e.g., ARCHIVE_NOT_FOUND, PASSWORD_REQUIRED)
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: object
+          nullable: true
+          description: Additional error context
+
+# IPC API Endpoints
+# Note: In Electron IPC, "endpoints" are channel names with invoke/handle pattern
+paths:
+  # Archive Operations
+  /archive/open:
+    post:
+      tags: [Archive Operations]
+      summary: Open an archive file
+      description: Opens archive, scans contents, builds folder tree, returns metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filePath]
+              properties:
+                filePath:
+                  type: string
+                  description: Absolute path to archive file
+                password:
+                  type: string
+                  nullable: true
+                  description: Password for encrypted archives
+      responses:
+        '200':
+          description: Archive opened successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Archive'
+        '400':
+          description: Archive could not be opened
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                passwordRequired:
+                  value:
+                    error: PASSWORD_REQUIRED
+                    message: Archive is password protected
+                invalidFormat:
+                  value:
+                    error: UNSUPPORTED_FORMAT
+                    message: Archive format not supported
+                noImages:
+                  value:
+                    error: NO_IMAGES_FOUND
+                    message: Archive contains no supported image files
+
+  /archive/close:
+    post:
+      tags: [Archive Operations]
+      summary: Close an open archive
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [archiveId]
+              properties:
+                archiveId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Archive closed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /archive/list-images:
+    post:
+      tags: [Archive Operations]
+      summary: Get list of all images in archive
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [archiveId]
+              properties:
+                archiveId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Image list retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  images:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Image'
+
+  # Image Operations
+  /image/load:
+    post:
+      tags: [Image Operations]
+      summary: Load full-resolution image data
+      description: Extracts image from archive and returns as Buffer or base64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [archiveId, imageId]
+              properties:
+                archiveId:
+                  type: string
+                  format: uuid
+                imageId:
+                  type: string
+                  format: uuid
+                encoding:
+                  type: string
+                  enum: [buffer, base64]
+                  default: base64
+                  description: How to return image data
+      responses:
+        '200':
+          description: Image loaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [imageId, data, mimeType]
+                properties:
+                  imageId:
+                    type: string
+                    format: uuid
+                  data:
+                    type: string
+                    description: Image data (base64 or buffer)
+                  mimeType:
+                    type: string
+                    example: image/jpeg
+                  dimensions:
+                    $ref: '#/components/schemas/ImageDimensions'
+
+  /image/generate-thumbnail:
+    post:
+      tags: [Image Operations]
+      summary: Generate thumbnail for an image
+      description: Creates cached thumbnail if not exists, returns path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [archiveId, imageId]
+              properties:
+                archiveId:
+                  type: string
+                  format: uuid
+                imageId:
+                  type: string
+                  format: uuid
+                size:
+                  type: integer
+                  default: 200
+                  description: Thumbnail width/height (square)
+      responses:
+        '200':
+          description: Thumbnail generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Thumbnail'
+
+  /image/generate-thumbnails-batch:
+    post:
+      tags: [Image Operations]
+      summary: Generate multiple thumbnails in background
+      description: Queues thumbnail generation for array of images, returns immediately
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [archiveId, imageIds]
+              properties:
+                archiveId:
+                  type: string
+                  format: uuid
+                imageIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                size:
+                  type: integer
+                  default: 200
+      responses:
+        '200':
+          description: Batch generation queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  queued:
+                    type: integer
+                    description: Number of thumbnails queued
+                  jobId:
+                    type: string
+                    description: Job ID for tracking progress
+
+  # Navigation
+  /navigation/go-to-page:
+    post:
+      tags: [Navigation]
+      summary: Navigate to specific page index
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId, pageIndex]
+              properties:
+                sessionId:
+                  type: string
+                  format: uuid
+                pageIndex:
+                  type: integer
+                  minimum: 0
+      responses:
+        '200':
+          description: Navigation successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session:
+                    $ref: '#/components/schemas/ViewingSession'
+                  images:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Image'
+                    description: Current page image(s) (1 or 2 depending on view mode)
+
+  /navigation/next-page:
+    post:
+      tags: [Navigation]
+      summary: Navigate to next page
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId]
+              properties:
+                sessionId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Navigation successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ViewingSession'
+
+  /navigation/previous-page:
+    post:
+      tags: [Navigation]
+      summary: Navigate to previous page
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId]
+              properties:
+                sessionId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Navigation successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ViewingSession'
+
+  # Bookmarks
+  /bookmarks/list:
+    post:
+      tags: [Bookmarks]
+      summary: List all bookmarks for an archive
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [archivePath]
+              properties:
+                archivePath:
+                  type: string
+      responses:
+        '200':
+          description: Bookmark list retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bookmarks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Bookmark'
+
+  /bookmarks/create:
+    post:
+      tags: [Bookmarks]
+      summary: Create a new bookmark
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [archivePath, pageIndex]
+              properties:
+                archivePath:
+                  type: string
+                imageId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                pageIndex:
+                  type: integer
+                note:
+                  type: string
+                  maxLength: 500
+                  default: ''
+      responses:
+        '200':
+          description: Bookmark created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bookmark'
+
+  /bookmarks/update:
+    post:
+      tags: [Bookmarks]
+      summary: Update an existing bookmark
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, note]
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Bookmark updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bookmark'
+
+  /bookmarks/delete:
+    post:
+      tags: [Bookmarks]
+      summary: Delete a bookmark
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Bookmark deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  # Session Management
+  /session/get:
+    post:
+      tags: [Session Management]
+      summary: Get viewing session for archive
+      description: Returns existing session or creates new one with defaults
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [archivePath]
+              properties:
+                archivePath:
+                  type: string
+      responses:
+        '200':
+          description: Session retrieved or created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ViewingSession'
+
+  /session/update:
+    post:
+      tags: [Session Management]
+      summary: Update viewing session state
+      description: Saves session state changes (debounced on client)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ViewingSession'
+      responses:
+        '200':
+          description: Session updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /session/delete:
+    post:
+      tags: [Session Management]
+      summary: Delete a viewing session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Session deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  # Settings
+  /settings/get:
+    post:
+      tags: [Settings]
+      summary: Get user settings
+      responses:
+        '200':
+          description: Settings retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  thumbnailSize:
+                    type: integer
+                    default: 200
+                  thumbnailCacheMaxSize:
+                    type: integer
+                    default: 5368709120
+                    description: 5GB in bytes
+                  defaultViewMode:
+                    type: string
+                    enum: [single, two_page]
+                    default: single
+                  defaultReadingDirection:
+                    type: string
+                    enum: [ltr, rtl]
+                    default: ltr
+                  keyboardShortcuts:
+                    type: object
+                    description: Customizable keyboard shortcuts
+
+  /settings/update:
+    post:
+      tags: [Settings]
+      summary: Update user settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Partial settings object (only changed fields)
+      responses:
+        '200':
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+# IPC Event Channels (one-way messages from main to renderer)
+x-ipc-events:
+  archive-scan-progress:
+    description: Emitted during archive scanning
+    payload:
+      type: object
+      properties:
+        archiveId:
+          type: string
+          format: uuid
+        scannedFiles:
+          type: integer
+        totalFiles:
+          type: integer
+        currentFile:
+          type: string
+
+  thumbnail-generated:
+    description: Emitted when a thumbnail finishes generating
+    payload:
+      $ref: '#/components/schemas/Thumbnail'
+
+  thumbnail-batch-progress:
+    description: Emitted during batch thumbnail generation
+    payload:
+      type: object
+      properties:
+        jobId:
+          type: string
+        completed:
+          type: integer
+        total:
+          type: integer
+        currentImageId:
+          type: string
+
+  error:
+    description: Emitted when background operation fails
+    payload:
+      $ref: '#/components/schemas/ErrorResponse'
