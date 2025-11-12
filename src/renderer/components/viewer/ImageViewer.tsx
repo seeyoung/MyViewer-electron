@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Stage, Layer, Image as KonvaImage } from 'react-konva';
 import { useViewerStore } from '../../store/viewerStore';
 import { FitMode } from '@shared/types/ViewingSession';
+import { SourceType } from '@shared/types/Source';
 
 type ImageLoadResponse = {
   data: string;
@@ -32,6 +33,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
   const fitMode = useViewerStore(state => state.fitMode);
   const setFitMode = useViewerStore(state => state.setFitMode);
   const isFullscreen = useViewerStore(state => state.isFullscreen);
+  const currentSource = useViewerStore(state => state.currentSource);
   const stageRef = useRef<any>(null);
   const toolbarTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [screenSize, setScreenSize] = useState({ width: window.innerWidth, height: window.innerHeight });
@@ -71,7 +73,8 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
       const result = await window.electronAPI.invoke('image:load', {
         archiveId: img.archiveId,
         imagePath: img.pathInArchive,
-        encoding: 'base64'
+        encoding: 'base64',
+        sourceType: currentSource?.type ?? SourceType.ARCHIVE,
       });
 
       if (!isImageLoadResponse(result)) {

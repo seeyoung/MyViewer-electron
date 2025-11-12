@@ -15,6 +15,8 @@ export interface FolderOpenResult {
 }
 
 export class FolderService {
+  private openFolders = new Map<string, { source: SourceDescriptor; rootFolder: FolderNode; basePath: string }>();
+
   async openFolder(folderPath: string): Promise<FolderOpenResult> {
     const stats = await fs.stat(folderPath);
     if (!stats.isDirectory()) {
@@ -38,11 +40,39 @@ export class FolderService {
       label: path.basename(folderPath),
     };
 
+    this.openFolders.set(sourceId, {
+      source,
+      rootFolder,
+      basePath: folderPath,
+    });
+
     return {
       source,
       rootFolder,
       images,
     };
+  }
+
+  getOpenFolder(sourceId: string) {
+    return this.openFolders.get(sourceId);
+  }
+
+  async loadImage(sourceId: string, relativePath: string): Promise<Buffer> {
+    const folder = this.openFolders.get(sourceId);
+    if (!folder) {
+      throw new Error('Folder source not found');
+    }
+
+    const normalizedRelative = path.normalize(relativePath);
+    const absolutePath = path.join(folder.basePath, normalizedRelative);
+    const resolvedBase = path.resolve(folder.basePath);
+    const resolvedTarget = path.resolve(absolutePath);
+
+    if (!resolvedTarget.startsWith(resolvedBase)) {
+      throw new Error('Invalid path');
+    }
+
+    return fs.readFile(resolvedTarget);
   }
 
   private async scanFolder(folderPath: string): Promise<Image[]> {

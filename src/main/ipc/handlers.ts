@@ -63,6 +63,7 @@ import { FolderService } from '../services/FolderService';
 import { withErrorHandling, IpcErrorCode, createIpcError } from './error-handler';
 import * as channels from '@shared/constants/ipc-channels';
 import { SourceType } from '@shared/types/Source';
+import { detectFormatFromExtension } from '@lib/image-utils';
 
 // Service instances
 const archiveService = new ArchiveService();
@@ -184,13 +185,28 @@ export function initializeIpcHandlers(): void {
   registry.register(
     channels.IMAGE_LOAD,
     withErrorHandling(async (event, data: any) => {
-      const { archiveId, imagePath, encoding } = data;
+      const { archiveId, imagePath, encoding, sourceType } = data;
+
+      if (sourceType === SourceType.FOLDER) {
+        const folder = folderService.getOpenFolder(archiveId);
+        if (!folder) {
+          throw createIpcError(IpcErrorCode.ARCHIVE_NOT_FOUND, 'Folder source not found');
+        }
+
+        const buffer = await folderService.loadImage(archiveId, imagePath);
+        const format = detectFormatFromExtension(imagePath);
+
+        if (encoding === 'base64') {
+          return { data: buffer.toString('base64'), format };
+        }
+        return { data: buffer, format };
+      }
+
       const archive = archiveService.getArchive(archiveId);
       if (!archive) {
         throw createIpcError(IpcErrorCode.ARCHIVE_NOT_FOUND, 'Archive not found');
       }
 
-      // Find image by path
       const images = getAllImagesFromFolder(archive.rootFolder);
       const image = images.find(img => img.pathInArchive === imagePath);
 
@@ -201,10 +217,9 @@ export function initializeIpcHandlers(): void {
       if (encoding === 'base64') {
         const base64 = await imageService.loadImageAsBase64(archiveId, image);
         return { data: base64, format: image.format };
-      } else {
-        const buffer = await imageService.loadImage(archiveId, image);
-        return { data: buffer, format: image.format };
       }
+      const buffer = await imageService.loadImage(archiveId, image);
+      return { data: buffer, format: image.format };
     })
   );
 
