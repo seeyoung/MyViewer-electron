@@ -4,6 +4,7 @@ import { FolderNode } from '@shared/types/FolderNode';
 import { ArchiveReader } from './archive/ArchiveReader';
 import { ZipReader } from './archive/ZipReader';
 import { RarReader } from './archive/RarReader';
+import { RarReaderJS } from './archive/RarReaderJS';
 import { detectFormatFromExtension, isSupportedImageFormat } from '@lib/image-utils';
 import { sanitizePath, getParentPath, splitPath } from '@lib/file-utils';
 import { naturalSortBy } from '@lib/natural-sort';
@@ -53,7 +54,7 @@ export class ArchiveService {
         return new ZipReader();
       case ArchiveFormat.RAR:
       case ArchiveFormat.CBR:
-        return new RarReader();
+        return new RarReaderJS(); // Use correct JavaScript implementation (no system dependencies)
       case ArchiveFormat.SEVEN_ZIP:
       case ArchiveFormat.TAR:
         throw new Error('Format not yet implemented');
