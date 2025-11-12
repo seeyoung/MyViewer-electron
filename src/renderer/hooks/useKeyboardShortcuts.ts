@@ -98,6 +98,18 @@ export function useKeyboardShortcuts() {
           setFitMode(FitMode.ACTUAL_SIZE);
           break;
 
+        case 'w':
+        case 'W':
+          event.preventDefault();
+          setFitMode(FitMode.FIT_WIDTH);
+          break;
+
+        case 'h':
+        case 'H':
+          event.preventDefault();
+          setFitMode(FitMode.FIT_HEIGHT);
+          break;
+
         case 'Escape':
           if (isFullscreen) {
             event.preventDefault();
