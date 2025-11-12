@@ -1,11 +1,13 @@
 import { useEffect } from 'react';
 import { useImageNavigation } from './useImageNavigation';
 import { useViewerStore } from '../store/viewerStore';
+import { FitMode } from '@shared/types/ViewingSession';
 
 export function useKeyboardShortcuts() {
   const { goToNext, goToPrevious, goToFirst, goToLast } = useImageNavigation();
   const zoomLevel = useViewerStore(state => state.zoomLevel);
   const setZoomLevel = useViewerStore(state => state.setZoomLevel);
+  const setFitMode = useViewerStore(state => state.setFitMode);
   const isFullscreen = useViewerStore(state => state.isFullscreen);
 
   useEffect(() => {
@@ -107,6 +109,7 @@ export function useKeyboardShortcuts() {
 
         case 'b':
         case 'B':
+        case 'ㅜ':
           if (!event.ctrlKey && !event.metaKey && !event.altKey) {
             console.log('⌨️  B key pressed - boss key minimize');
             event.preventDefault();
@@ -133,6 +136,7 @@ export function useKeyboardShortcuts() {
     goToLast,
     zoomLevel,
     setZoomLevel,
+    setFitMode,
     isFullscreen,
   ]);
 }

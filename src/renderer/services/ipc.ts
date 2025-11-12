@@ -30,9 +30,7 @@ class IpcClient {
    * Listen to IPC events
    */
   public on(channel: string, callback: (...args: unknown[]) => void): () => void {
-    return this.electronAPI.on(channel, (event, ...args) => {
-      callback(...args);
-    });
+    return this.electronAPI.on(channel, callback);
   }
 
   /**

@@ -196,31 +196,6 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
     }
   }, [fitMode, width, height, image, isFullscreen, screenSize]);
 
-  // Auto-fit to screen in fullscreen modes
-  useEffect(() => {
-    if (isFullscreen && image) {
-      const containerWidth = isFullscreen ? screenSize.width : width;
-      const containerHeight = isFullscreen ? screenSize.height : height;
-
-      // Calculate zoom to fit image to screen
-      const scaleX = containerWidth / image.width;
-      const scaleY = containerHeight / image.height;
-      const fitZoom = Math.min(scaleX, scaleY, 1); // Don't upscale beyond 100%
-
-      setZoomLevel(fitZoom);
-      setFitMode(FitMode.CUSTOM);
-
-      // Center the image
-      const imageWidth = image.width * fitZoom;
-      const imageHeight = image.height * fitZoom;
-
-      setStagePosition({
-        x: (containerWidth - imageWidth) / 2,
-        y: (containerHeight - imageHeight) / 2,
-      });
-    }
-  }, [isFullscreen, width, height, image, screenSize]);
-
   // Cleanup timeout on unmount
   useEffect(() => {
     return () => {

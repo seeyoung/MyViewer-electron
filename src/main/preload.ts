@@ -14,10 +14,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   // IPC event listeners
-  on: (channel: string, callback: (event: IpcRendererEvent, ...args: unknown[]) => void) => {
-    ipcRenderer.on(channel, callback);
+  on: (channel: string, callback: (...args: unknown[]) => void) => {
+    const wrappedListener = (_event: IpcRendererEvent, ...args: unknown[]) => {
+      callback(...args);
+    };
+
+    ipcRenderer.on(channel, wrappedListener);
     return () => {
-      ipcRenderer.removeListener(channel, callback);
+      ipcRenderer.removeListener(channel, wrappedListener);
     };
   },
 
@@ -35,7 +39,7 @@ declare global {
       send: (channel: string, data?: unknown) => void;
       on: (
         channel: string,
-        callback: (event: IpcRendererEvent, ...args: unknown[]) => void
+        callback: (...args: unknown[]) => void
       ) => () => void;
       removeAllListeners: (channel: string) => void;
     };

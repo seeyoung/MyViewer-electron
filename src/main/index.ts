@@ -12,6 +12,7 @@ import { initializeDatabase, closeDatabase } from './db/init';
 import { initializeIpcHandlers } from './ipc/handlers';
 
 let mainWindow: BrowserWindow | null = null;
+let pendingBossKeyMinimize = false;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -50,6 +51,17 @@ function createWindow() {
 
   mainWindow.on('leave-full-screen', () => {
     mainWindow?.webContents.send('window-fullscreen-changed', false);
+
+    if (pendingBossKeyMinimize && mainWindow && !mainWindow.isDestroyed()) {
+      console.log('🔽 Boss key pending minimize after fullscreen exit');
+      pendingBossKeyMinimize = false;
+      setImmediate(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.minimize();
+          console.log('✅ Boss key: Window minimized after exiting fullscreen');
+        }
+      });
+    }
   });
 
   // Set up application menu
@@ -123,18 +135,26 @@ function initializeWindowHandlers() {
       console.log(`📊 Window state: maximized=${isMaximized}, fullscreen=${isFullScreen}`);
 
       try {
+        let shouldMinimizeNow = true;
+
         if (isFullScreen) {
           // 전체 화면에서는 먼저 나오기
+          pendingBossKeyMinimize = true;
+          shouldMinimizeNow = false;
           mainWindow.setFullScreen(false);
         } else if (isMaximized) {
           // 최대화에서는 먼저 원래 크기로
           mainWindow.unmaximize();
         }
 
-        // 그냥 바로 최소화
-        console.log('📉 Minimizing window...');
-        mainWindow.minimize();
-        console.log('✅ BOSS KEY: Window minimized successfully');
+        if (shouldMinimizeNow) {
+          // 그냥 바로 최소화
+          console.log('📉 Minimizing window...');
+          mainWindow.minimize();
+          console.log('✅ BOSS KEY: Window minimized successfully');
+        } else {
+          console.log('⏳ Waiting for fullscreen exit before minimizing');
+        }
 
       } catch (error) {
         console.error('❌ Error minimizing window:', error);

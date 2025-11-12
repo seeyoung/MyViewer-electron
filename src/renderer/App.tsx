@@ -24,7 +24,12 @@ function App() {
 
   // Listen for file-opened event from main process
   useEffect(() => {
-    const removeListener = window.electronAPI.on('file-opened', async (filePath: any) => {
+    const removeListener = window.electronAPI.on('file-opened', async (...args: unknown[]) => {
+      const [filePath] = args;
+      if (typeof filePath !== 'string') {
+        console.error('Invalid file path received from main process');
+        return;
+      }
       try {
         await openArchive(filePath);
       } catch (error) {
@@ -38,7 +43,7 @@ function App() {
   }, [openArchive]);
 
   useEffect(() => {
-    const removeListener = window.electronAPI.on('window-fullscreen-changed', (_event, fullscreenState: unknown) => {
+    const removeListener = window.electronAPI.on('window-fullscreen-changed', (fullscreenState: unknown) => {
       setFullscreen(Boolean(fullscreenState));
     });
 
