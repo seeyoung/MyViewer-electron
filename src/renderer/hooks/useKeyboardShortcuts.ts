@@ -33,7 +33,7 @@ export function useKeyboardShortcuts() {
         return;
       }
 
-      switch (event.key) {
+      switch (event.code) {
         case 'ArrowRight':
         case 'PageDown':
           event.preventDefault();
@@ -69,45 +69,42 @@ export function useKeyboardShortcuts() {
           goToLast();
           break;
 
-        case '=':
-        case '+':
+        case 'Equal':
+        case 'NumpadAdd':
           if (event.ctrlKey || event.metaKey) {
             event.preventDefault();
             setZoomLevel(zoomLevel * 1.2);
           }
           break;
 
-        case '-':
+        case 'Minus':
+        case 'NumpadSubtract':
           if (event.ctrlKey || event.metaKey) {
             event.preventDefault();
             setZoomLevel(zoomLevel / 1.2);
           }
           break;
 
-        case '0':
+        case 'Digit0':
+        case 'Numpad0':
           if (event.ctrlKey || event.metaKey) {
             event.preventDefault();
             setZoomLevel(1.0);
           }
           break;
 
-        case 'o':
-        case 'O':
+        case 'KeyO':
           event.preventDefault();
           setZoomLevel(1.0);
           setFitMode(FitMode.ACTUAL_SIZE);
           break;
 
-        case 'w':
-        case 'W':
-        case 'ㅈ':
+        case 'KeyW':
           event.preventDefault();
           setFitMode(FitMode.FIT_WIDTH);
           break;
 
-        case 'h':
-        case 'H':
-        case 'ㅗ':
+        case 'KeyH':
           event.preventDefault();
           setFitMode(FitMode.FIT_HEIGHT);
           break;
@@ -128,9 +125,7 @@ export function useKeyboardShortcuts() {
           window.electronAPI.send('window-toggle-fullscreen');
           break;
 
-        case 'b':
-        case 'B':
-        case 'ㅜ':
+        case 'KeyB':
           if (!event.ctrlKey && !event.metaKey && !event.altKey) {
             console.log('⌨️  B key pressed - boss key minimize');
             event.preventDefault();
