@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import ErrorBoundary from './components/shared/ErrorBoundary';
 import NavigationBar from './components/viewer/NavigationBar';
 import ImageViewer from './components/viewer/ImageViewer';
@@ -18,6 +18,7 @@ function App() {
   const setFullscreen = useViewerStore(state => state.setFullscreen);
   const { openArchive, isOpening } = useArchive();
   const [viewerSize, setViewerSize] = useState({ width: 800, height: 600 });
+  const imageFullscreenForcedRef = useRef(false);
 
   // Enable keyboard shortcuts
   console.log('⌨️ About to enable keyboard shortcuts...');
@@ -47,6 +48,22 @@ function App() {
       removeListener();
     };
   }, [setFullscreen]);
+
+  // Ensure 이미지 전체화면 triggers window fullscreen and releases it afterward
+  useEffect(() => {
+    if (isImageFullscreen) {
+      if (!isFullscreen) {
+        window.electronAPI.send('window-set-fullscreen', true);
+        imageFullscreenForcedRef.current = true;
+      }
+      return;
+    }
+
+    if (imageFullscreenForcedRef.current && isFullscreen) {
+      window.electronAPI.send('window-set-fullscreen', false);
+    }
+    imageFullscreenForcedRef.current = false;
+  }, [isImageFullscreen, isFullscreen]);
 
   // Handle drag and drop
   useEffect(() => {
