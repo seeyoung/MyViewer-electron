@@ -8,7 +8,19 @@ export function useKeyboardShortcuts() {
   const setZoomLevel = useViewerStore(state => state.setZoomLevel);
 
   useEffect(() => {
+    console.log('⌨️  Initializing keyboard shortcuts...');
+
     const handleKeyDown = (event: KeyboardEvent) => {
+      // DEBUG: 모든 키보드 이벤트 로그
+      console.log('🎹 Key pressed:', {
+        key: event.key,
+        code: event.code,
+        target: event.target,
+        targetElement: event.target?.tagName,
+        isActive: document.hasFocus(),
+        windowFocused: document.visibilityState === 'visible'
+      });
+
       // Don't handle if user is typing in an input
       if (
         event.target instanceof HTMLInputElement ||
@@ -64,7 +76,9 @@ export function useKeyboardShortcuts() {
           break;
 
         case 'Escape':
+          console.log('⌨️  ESC key pressed in renderer');
           event.preventDefault();
+          console.log('📤 Sending window-minimize IPC message');
           // 창 최소화
           window.electronAPI.send('window-minimize');
           break;
@@ -74,10 +88,12 @@ export function useKeyboardShortcuts() {
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
+    console.log('👂 Adding keyboard event listener to document...');
+    document.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      console.log('🔇 Removing keyboard event listener...');
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, [goToNext, goToPrevious, goToFirst, goToLast, zoomLevel, setZoomLevel]);
 }

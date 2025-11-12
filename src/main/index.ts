@@ -97,11 +97,44 @@ function setupMenu() {
   Menu.setApplicationMenu(menu);
 }
 
+
 function initializeWindowHandlers() {
-  // 창 최소화 이벤트 핸들러
+  // 창 최소화 이벤트 핸들러 (보스키 기능)
   ipcMain.on('window-minimize', () => {
-    if (mainWindow) {
-      mainWindow.minimize();
+    console.log('🔽 ESC key pressed - BOSS KEY ACTIVATED');
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      // 이미 최소화됐으면 아무것도 안 함
+      if (mainWindow.isMinimized()) {
+        console.log('📋 Window already minimized');
+        return;
+      }
+
+      const isMaximized = mainWindow.isMaximized();
+      const isFullScreen = mainWindow.isFullScreen();
+      console.log(`📊 Window state: maximized=${isMaximized}, fullscreen=${isFullScreen}`);
+
+      try {
+        if (isFullScreen) {
+          // 전체 화면에서는 먼저 나오기
+          mainWindow.setFullScreen(false);
+        } else if (isMaximized) {
+          // 최대화에서는 먼저 원래 크기로
+          mainWindow.unmaximize();
+        }
+
+        // 그냥 바로 최소화
+        console.log('📉 Minimizing window...');
+        mainWindow.minimize();
+        console.log('✅ BOSS KEY: Window minimized successfully');
+
+      } catch (error) {
+        console.error('❌ Error minimizing window:', error);
+        // 실패하면 그냥 숨기기
+        mainWindow.hide();
+      }
+    } else {
+      console.log('❌ No main window found');
     }
   });
 }

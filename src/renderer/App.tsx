@@ -8,6 +8,8 @@ import { useArchive } from './hooks/useArchive';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 function App() {
+  console.log('🚀 App component is rendering!');
+
   const currentArchive = useViewerStore(state => state.currentArchive);
   const isLoading = useViewerStore(state => state.isLoading);
   const error = useViewerStore(state => state.error);
@@ -15,6 +17,7 @@ function App() {
   const [viewerSize, setViewerSize] = useState({ width: 800, height: 600 });
 
   // Enable keyboard shortcuts
+  console.log('⌨️ About to enable keyboard shortcuts...');
   useKeyboardShortcuts();
 
   // Listen for file-opened event from main process
