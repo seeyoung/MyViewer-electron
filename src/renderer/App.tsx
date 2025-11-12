@@ -13,6 +13,9 @@ function App() {
   const currentArchive = useViewerStore(state => state.currentArchive);
   const isLoading = useViewerStore(state => state.isLoading);
   const error = useViewerStore(state => state.error);
+  const isFullscreen = useViewerStore(state => state.isFullscreen);
+  const isImageFullscreen = useViewerStore(state => state.isImageFullscreen);
+  const setFullscreen = useViewerStore(state => state.setFullscreen);
   const { openArchive, isOpening } = useArchive();
   const [viewerSize, setViewerSize] = useState({ width: 800, height: 600 });
 
@@ -34,6 +37,16 @@ function App() {
       removeListener();
     };
   }, [openArchive]);
+
+  useEffect(() => {
+    const removeListener = window.electronAPI.on('window-fullscreen-changed', (_event, fullscreenState: unknown) => {
+      setFullscreen(Boolean(fullscreenState));
+    });
+
+    return () => {
+      removeListener();
+    };
+  }, [setFullscreen]);
 
   // Handle drag and drop
   useEffect(() => {
@@ -71,9 +84,9 @@ function App() {
     const updateSize = () => {
       const header = document.querySelector('.app-header');
       const nav = document.querySelector('.navigation-bar');
-      const headerHeight = header?.clientHeight || 0;
-      const navHeight = nav?.clientHeight || 0;
-      const availableHeight = window.innerHeight - headerHeight - navHeight;
+      const headerHeight = (isFullscreen || isImageFullscreen) ? 0 : (header?.clientHeight || 0);
+      const navHeight = (isFullscreen || isImageFullscreen) ? 0 : (nav?.clientHeight || 0);
+      const availableHeight = (isFullscreen || isImageFullscreen) ? window.innerHeight : (window.innerHeight - headerHeight - navHeight);
 
       setViewerSize({
         width: window.innerWidth,
@@ -87,19 +100,19 @@ function App() {
     return () => {
       window.removeEventListener('resize', updateSize);
     };
-  }, [currentArchive]);
+  }, [currentArchive, isFullscreen, isImageFullscreen]);
 
   return (
     <ErrorBoundary>
-      <div className="app">
-        <header className="app-header">
+      <div className={`app ${isFullscreen ? 'fullscreen' : ''} ${isImageFullscreen ? 'image-fullscreen' : ''}`}>
+        <header className={`app-header ${(isFullscreen || isImageFullscreen) ? 'hidden' : ''}`}>
           <h1>MyViewer</h1>
           <p className="subtitle">Archive Image Viewer</p>
         </header>
 
-        {currentArchive && <NavigationBar />}
+        {currentArchive && <NavigationBar className={isFullscreen ? 'hidden' : isImageFullscreen ? 'floating' : ''} />}
 
-        <main className="app-main">
+        <main className={`app-main ${(isFullscreen || isImageFullscreen) ? 'fullscreen' : ''}`}>
           {isOpening || isLoading ? (
             <LoadingIndicator message="Loading archive..." />
           ) : error ? (

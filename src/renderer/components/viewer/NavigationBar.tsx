@@ -3,7 +3,11 @@ import { useViewerStore } from '../../store/viewerStore';
 import { useImageNavigation } from '../../hooks/useImageNavigation';
 import { FitMode } from '@shared/types/ViewingSession';
 
-const NavigationBar: React.FC = () => {
+interface NavigationBarProps {
+  className?: string;
+}
+
+const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
   const currentPageIndex = useViewerStore(state => state.currentPageIndex);
   const images = useViewerStore(state => state.images);
   const currentArchive = useViewerStore(state => state.currentArchive);
@@ -11,6 +15,9 @@ const NavigationBar: React.FC = () => {
   const setZoomLevel = useViewerStore(state => state.setZoomLevel);
   const fitMode = useViewerStore(state => state.fitMode);
   const setFitMode = useViewerStore(state => state.setFitMode);
+  const isFullscreen = useViewerStore(state => state.isFullscreen);
+  const isImageFullscreen = useViewerStore(state => state.isImageFullscreen);
+  const setImageFullscreen = useViewerStore(state => state.setImageFullscreen);
 
   const totalPages = images.length;
   const currentPage = currentPageIndex + 1; // Display 1-based index
@@ -50,12 +57,22 @@ const NavigationBar: React.FC = () => {
     setFitMode(FitMode.FIT_HEIGHT);
   };
 
+  const handleToggleAppFullscreen = () => {
+    window.electronAPI.send('window-toggle-fullscreen');
+  };
+
+  const handleToggleImageFullscreen = () => {
+    setImageFullscreen(!isImageFullscreen);
+  };
+
   if (!currentArchive) {
     return null;
   }
 
+  const navigationClasses = ['navigation-bar', className].filter(Boolean).join(' ');
+
   return (
-    <div className="navigation-bar">
+    <div className={navigationClasses}>
       <div className="navigation-info">
         <span className="archive-name">{currentArchive.fileName}</span>
         {totalPages > 0 && (
@@ -135,6 +152,24 @@ const NavigationBar: React.FC = () => {
             title="Fit Height"
           >
             ↕
+          </button>
+        </div>
+
+        <div className="fullscreen-controls">
+          <button
+            onClick={handleToggleAppFullscreen}
+            className={`fullscreen-button ${isFullscreen ? 'active' : ''}`}
+            title="Toggle App Fullscreen (F11)"
+          >
+            {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+          </button>
+
+          <button
+            onClick={handleToggleImageFullscreen}
+            className={`fullscreen-button ${isImageFullscreen ? 'active' : ''}`}
+            title="Toggle Image Fullscreen (Enter)"
+          >
+            {isImageFullscreen ? 'Exit Image View' : 'Image Fullscreen'}
           </button>
         </div>
       </div>
@@ -264,6 +299,35 @@ const NavigationBar: React.FC = () => {
           background-color: #007acc;
           border-color: #007acc;
           box-shadow: 0 0 0 1px rgba(0, 122, 204, 0.3);
+        }
+
+        .fullscreen-controls {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding-left: 0.5rem;
+          border-left: 1px solid #4d4d4d;
+        }
+
+        .fullscreen-button {
+          padding: 0.4rem 0.75rem;
+          background-color: #3d3d3d;
+          color: #fff;
+          border: 1px solid #4d4d4d;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 0.8rem;
+          min-width: 120px;
+          transition: background-color 0.2s, border-color 0.2s;
+        }
+
+        .fullscreen-button:hover {
+          background-color: #4d4d4d;
+        }
+
+        .fullscreen-button.active {
+          background-color: #007acc;
+          border-color: #007acc;
         }
       `}</style>
     </div>

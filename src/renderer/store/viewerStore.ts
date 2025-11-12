@@ -24,6 +24,10 @@ interface ViewerState {
   fitMode: FitMode;
   rotation: Rotation;
 
+  // Fullscreen state
+  isFullscreen: boolean;
+  isImageFullscreen: boolean;
+
   // UI visibility
   showThumbnails: boolean;
   showFolderTree: boolean;
@@ -47,6 +51,9 @@ interface ViewerState {
   setViewMode: (mode: ViewMode) => void;
   setZoomLevel: (level: number) => void;
   setFitMode: (mode: FitMode) => void;
+  setFullscreen: (fullscreen: boolean) => void;
+  setImageFullscreen: (fullscreen: boolean) => void;
+  toggleImageFullscreen: () => void;
   setError: (error: string | null) => void;
   setLoading: (loading: boolean) => void;
   reset: () => void;
@@ -64,6 +71,9 @@ export const useViewerStore = create<ViewerState>((set) => ({
   zoomLevel: 1.0,
   fitMode: FitMode.FIT_HEIGHT,
   rotation: Rotation.NONE,
+
+  isFullscreen: false,
+  isImageFullscreen: false,
 
   showThumbnails: true,
   showFolderTree: false,
@@ -93,6 +103,12 @@ export const useViewerStore = create<ViewerState>((set) => ({
   
   setFitMode: (mode) => set({ fitMode: mode }),
 
+  setFullscreen: (fullscreen) => set({ isFullscreen: fullscreen }),
+
+  setImageFullscreen: (fullscreen) => set({ isImageFullscreen: fullscreen }),
+
+  toggleImageFullscreen: () => set((state) => ({ isImageFullscreen: !state.isImageFullscreen })),
+
   setError: (error) => set({ error }),
 
   setLoading: (loading) => set({ isLoading: loading }),
@@ -107,6 +123,8 @@ export const useViewerStore = create<ViewerState>((set) => ({
       zoomLevel: 1.0,
       fitMode: FitMode.FIT_HEIGHT,
       rotation: Rotation.NONE,
+      isFullscreen: false,
+      isImageFullscreen: false,
       showThumbnails: true,
       showFolderTree: false,
       showBookmarks: false,

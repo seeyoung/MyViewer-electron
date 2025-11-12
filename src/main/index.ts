@@ -44,6 +44,14 @@ function createWindow() {
     mainWindow = null;
   });
 
+  mainWindow.on('enter-full-screen', () => {
+    mainWindow?.webContents.send('window-fullscreen-changed', true);
+  });
+
+  mainWindow.on('leave-full-screen', () => {
+    mainWindow?.webContents.send('window-fullscreen-changed', false);
+  });
+
   // Set up application menu
   setupMenu();
 }
@@ -101,7 +109,7 @@ function setupMenu() {
 function initializeWindowHandlers() {
   // 창 최소화 이벤트 핸들러 (보스키 기능)
   ipcMain.on('window-minimize', () => {
-    console.log('🔽 ESC key pressed - BOSS KEY ACTIVATED');
+    console.log('🔽 Boss key triggered - minimizing window');
 
     if (mainWindow && !mainWindow.isDestroyed()) {
       // 이미 최소화됐으면 아무것도 안 함
@@ -136,6 +144,27 @@ function initializeWindowHandlers() {
     } else {
       console.log('❌ No main window found');
     }
+  });
+
+  ipcMain.on('window-toggle-fullscreen', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      console.log('❌ Cannot toggle fullscreen - no active window');
+      return;
+    }
+
+    const nextState = !mainWindow.isFullScreen();
+    console.log(`🪟 Toggling fullscreen -> ${nextState}`);
+    mainWindow.setFullScreen(nextState);
+  });
+
+  ipcMain.on('window-set-fullscreen', (_event, shouldFullscreen: boolean) => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      console.log('❌ Cannot set fullscreen - no active window');
+      return;
+    }
+
+    console.log(`🪟 Setting fullscreen: ${shouldFullscreen}`);
+    mainWindow.setFullScreen(!!shouldFullscreen);
   });
 }
 

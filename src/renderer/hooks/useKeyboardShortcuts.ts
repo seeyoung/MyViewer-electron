@@ -6,25 +6,30 @@ export function useKeyboardShortcuts() {
   const { goToNext, goToPrevious, goToFirst, goToLast } = useImageNavigation();
   const zoomLevel = useViewerStore(state => state.zoomLevel);
   const setZoomLevel = useViewerStore(state => state.setZoomLevel);
+  const isFullscreen = useViewerStore(state => state.isFullscreen);
+  const isImageFullscreen = useViewerStore(state => state.isImageFullscreen);
+  const setImageFullscreen = useViewerStore(state => state.setImageFullscreen);
+  const toggleImageFullscreen = useViewerStore(state => state.toggleImageFullscreen);
 
   useEffect(() => {
     console.log('⌨️  Initializing keyboard shortcuts...');
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      const targetElement = event.target as (HTMLElement | null);
       // DEBUG: 모든 키보드 이벤트 로그
       console.log('🎹 Key pressed:', {
         key: event.key,
         code: event.code,
-        target: event.target,
-        targetElement: event.target?.tagName,
+        target: targetElement,
+        targetElement: targetElement?.tagName,
         isActive: document.hasFocus(),
         windowFocused: document.visibilityState === 'visible'
       });
 
       // Don't handle if user is typing in an input
       if (
-        event.target instanceof HTMLInputElement ||
-        event.target instanceof HTMLTextAreaElement
+        targetElement instanceof HTMLInputElement ||
+        targetElement instanceof HTMLTextAreaElement
       ) {
         return;
       }
@@ -32,9 +37,22 @@ export function useKeyboardShortcuts() {
       switch (event.key) {
         case 'ArrowRight':
         case 'PageDown':
-        case ' ': // Space
           event.preventDefault();
           goToNext();
+          break;
+
+        case 'Enter': // Enter key for image fullscreen
+          event.preventDefault();
+          // 이미지 전체 화면 토글
+          toggleImageFullscreen();
+          break;
+
+        case ' ': // Space (without modifier)
+          if (!event.ctrlKey && !event.metaKey) {
+            event.preventDefault();
+            // 다음 이미지
+            goToNext();
+          }
           break;
 
         case 'ArrowLeft':
@@ -76,11 +94,34 @@ export function useKeyboardShortcuts() {
           break;
 
         case 'Escape':
-          console.log('⌨️  ESC key pressed in renderer');
+          if (isImageFullscreen) {
+            event.preventDefault();
+            setImageFullscreen(false);
+            break;
+          }
+
+          if (isFullscreen) {
+            event.preventDefault();
+            window.electronAPI.send('window-set-fullscreen', false);
+            break;
+          }
+
+          break;
+
+        case 'F11':
+          console.log('⌨️  F11 key pressed - toggling fullscreen');
           event.preventDefault();
-          console.log('📤 Sending window-minimize IPC message');
-          // 창 최소화
-          window.electronAPI.send('window-minimize');
+          // 전체 화면 토글
+          window.electronAPI.send('window-toggle-fullscreen');
+          break;
+
+        case 'b':
+        case 'B':
+          if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+            console.log('⌨️  B key pressed - boss key minimize');
+            event.preventDefault();
+            window.electronAPI.send('window-minimize');
+          }
           break;
 
         default:
@@ -95,5 +136,16 @@ export function useKeyboardShortcuts() {
       console.log('🔇 Removing keyboard event listener...');
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [goToNext, goToPrevious, goToFirst, goToLast, zoomLevel, setZoomLevel]);
+  }, [
+    goToNext,
+    goToPrevious,
+    goToFirst,
+    goToLast,
+    zoomLevel,
+    setZoomLevel,
+    isFullscreen,
+    isImageFullscreen,
+    setImageFullscreen,
+    toggleImageFullscreen,
+  ]);
 }

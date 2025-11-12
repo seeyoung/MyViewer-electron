@@ -3,6 +3,20 @@ import { Stage, Layer, Image as KonvaImage } from 'react-konva';
 import { useViewerStore } from '../../store/viewerStore';
 import { FitMode } from '@shared/types/ViewingSession';
 
+type ImageLoadResponse = {
+  data: string;
+  format: string;
+};
+
+const isImageLoadResponse = (value: unknown): value is ImageLoadResponse => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const response = value as Partial<ImageLoadResponse>;
+  return typeof response.data === 'string' && typeof response.format === 'string';
+};
+
 interface ImageViewerProps {
   width: number;
   height: number;
@@ -17,7 +31,11 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
   const setZoomLevel = useViewerStore(state => state.setZoomLevel);
   const fitMode = useViewerStore(state => state.fitMode);
   const setFitMode = useViewerStore(state => state.setFitMode);
+  const isFullscreen = useViewerStore(state => state.isFullscreen);
+  const isImageFullscreen = useViewerStore(state => state.isImageFullscreen);
   const stageRef = useRef<any>(null);
+  const toolbarTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [screenSize, setScreenSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 
   const currentImage = images[currentPageIndex];
 
@@ -57,6 +75,10 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
         encoding: 'base64'
       });
 
+      if (!isImageLoadResponse(result)) {
+        throw new Error('Invalid response from image:load IPC');
+      }
+
       console.log('📥 IPC Response received:', {
         hasData: !!result.data,
         format: result.format,
@@ -87,22 +109,22 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
 
     const imageWidth = image.width;
     const imageHeight = image.height;
-    const containerWidth = width;
-    const containerHeight = height;
+    const containerWidth = isImageFullscreen ? screenSize.width : width;
+    const containerHeight = isImageFullscreen ? screenSize.height : height;
 
     switch (fitMode) {
       case FitMode.FIT_WIDTH:
         // Fit image width to screen width
         return containerWidth / imageWidth;
-      
+
       case FitMode.FIT_HEIGHT:
         // Fit image height to screen height
         return containerHeight / imageHeight;
-      
+
       case FitMode.ACTUAL_SIZE:
         // 100% actual size
         return 1.0;
-      
+
       default:
         return zoomLevel;
     }
@@ -114,23 +136,25 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
   // Calculate image boundaries
   const getImageBounds = () => {
     if (!image) return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
-    
+
     const imageWidth = image.width * effectiveZoom;
     const imageHeight = image.height * effectiveZoom;
-    
+    const containerWidth = isImageFullscreen ? screenSize.width : width;
+    const containerHeight = isImageFullscreen ? screenSize.height : height;
+
     // If image is smaller than viewport, center it and don't allow panning
-    if (imageWidth <= width && imageHeight <= height) {
-      const centerX = (width - imageWidth) / 2;
-      const centerY = (height - imageHeight) / 2;
+    if (imageWidth <= containerWidth && imageHeight <= containerHeight) {
+      const centerX = (containerWidth - imageWidth) / 2;
+      const centerY = (containerHeight - imageHeight) / 2;
       return { minX: centerX, maxX: centerX, minY: centerY, maxY: centerY };
     }
-    
+
     // Calculate bounds to keep image edges within viewport
-    const minX = Math.min(0, width - imageWidth);
-    const maxX = Math.max(0, width - imageWidth);
-    const minY = Math.min(0, height - imageHeight);
-    const maxY = Math.max(0, height - imageHeight);
-    
+    const minX = Math.min(0, containerWidth - imageWidth);
+    const maxX = Math.max(0, containerWidth - imageWidth);
+    const minY = Math.min(0, containerHeight - imageHeight);
+    const maxY = Math.max(0, containerHeight - imageHeight);
+
     return { minX, maxX, minY, maxY };
   };
 
@@ -146,29 +170,78 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
   // Center the image when fit mode is active (only when mode changes, not during zoom)
   useEffect(() => {
     if (fitMode !== FitMode.CUSTOM && image) {
+      const containerWidth = isImageFullscreen ? screenSize.width : width;
+      const containerHeight = isImageFullscreen ? screenSize.height : height;
+
       // Calculate zoom for the specific fit mode
       let modeZoom = 1.0;
       switch (fitMode) {
         case FitMode.FIT_WIDTH:
-          modeZoom = width / image.width;
+          modeZoom = containerWidth / image.width;
           break;
         case FitMode.FIT_HEIGHT:
-          modeZoom = height / image.height;
+          modeZoom = containerHeight / image.height;
           break;
         case FitMode.ACTUAL_SIZE:
           modeZoom = 1.0;
           break;
       }
-      
+
       const imageWidth = image.width * modeZoom;
       const imageHeight = image.height * modeZoom;
-      
+
       setStagePosition({
-        x: (width - imageWidth) / 2,
-        y: (height - imageHeight) / 2,
+        x: (containerWidth - imageWidth) / 2,
+        y: (containerHeight - imageHeight) / 2,
       });
     }
-  }, [fitMode, width, height, image]);
+  }, [fitMode, width, height, image, isImageFullscreen, screenSize]);
+
+  // Auto-fit to screen in fullscreen modes
+  useEffect(() => {
+    if ((isFullscreen || isImageFullscreen) && image) {
+      const containerWidth = isImageFullscreen ? screenSize.width : width;
+      const containerHeight = isImageFullscreen ? screenSize.height : height;
+
+      // Calculate zoom to fit image to screen
+      const scaleX = containerWidth / image.width;
+      const scaleY = containerHeight / image.height;
+      const fitZoom = Math.min(scaleX, scaleY, 1); // Don't upscale beyond 100%
+
+      setZoomLevel(fitZoom);
+      setFitMode(FitMode.CUSTOM);
+
+      // Center the image
+      const imageWidth = image.width * fitZoom;
+      const imageHeight = image.height * fitZoom;
+
+      setStagePosition({
+        x: (containerWidth - imageWidth) / 2,
+        y: (containerHeight - imageHeight) / 2,
+      });
+    }
+  }, [isFullscreen, isImageFullscreen, width, height, image, screenSize]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (toolbarTimeoutRef.current) {
+        clearTimeout(toolbarTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Update screen size on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setScreenSize({ width: window.innerWidth, height: window.innerHeight });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
 
   const handleWheel = (e: any) => {
     e.evt.preventDefault();
@@ -223,6 +296,39 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
     }
   };
 
+  // Handle mouse movement for floating toolbar in image fullscreen mode
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isImageFullscreen) return;
+
+    const mouseY = e.clientY;
+    const threshold = 50; // Show toolbar when mouse is within 50px of top
+
+    const floatingToolbar = document.querySelector('.navigation-bar.floating');
+    if (floatingToolbar) {
+      if (mouseY < threshold) {
+        floatingToolbar.classList.add('visible');
+
+        // Clear existing timeout
+        if (toolbarTimeoutRef.current) {
+          clearTimeout(toolbarTimeoutRef.current);
+        }
+
+        // Set timeout to hide toolbar after mouse leaves top area
+        toolbarTimeoutRef.current = setTimeout(() => {
+          floatingToolbar.classList.remove('visible');
+        }, 2000);
+      } else {
+        // Hide toolbar when mouse moves away from top area
+        if (toolbarTimeoutRef.current) {
+          clearTimeout(toolbarTimeoutRef.current);
+        }
+        toolbarTimeoutRef.current = setTimeout(() => {
+          floatingToolbar.classList.remove('visible');
+        }, 500);
+      }
+    }
+  };
+
   if (!currentImage || !image) {
     return (
       <div
@@ -252,26 +358,36 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
   };
 
   return (
-    <Stage 
-      width={width} 
-      height={height} 
-      onWheel={handleWheel}
-      onDragEnd={handleDragEnd}
-      ref={stageRef}
-      x={stagePosition.x}
-      y={stagePosition.y}
-      draggable={true} // Always enable dragging
+    <div
+      style={{
+        width: isImageFullscreen ? screenSize.width : width,
+        height: isImageFullscreen ? screenSize.height : height,
+        backgroundColor: (isFullscreen || isImageFullscreen) ? '#000000' : '#1e1e1e',
+        position: 'relative'
+      }}
+      onMouseMove={handleMouseMove}
     >
-      <Layer>
-        <KonvaImage
-          image={image}
-          x={0}
-          y={0}
-          scaleX={effectiveZoom}
-          scaleY={effectiveZoom}
-        />
-      </Layer>
-    </Stage>
+      <Stage
+        width={isImageFullscreen ? screenSize.width : width}
+        height={isImageFullscreen ? screenSize.height : height}
+        onWheel={handleWheel}
+        onDragEnd={handleDragEnd}
+        ref={stageRef}
+        x={stagePosition.x}
+        y={stagePosition.y}
+        draggable={true} // Always enable dragging
+      >
+        <Layer>
+          <KonvaImage
+            image={image}
+            x={0}
+            y={0}
+            scaleX={effectiveZoom}
+            scaleY={effectiveZoom}
+          />
+        </Layer>
+      </Stage>
+    </div>
   );
 };
 
