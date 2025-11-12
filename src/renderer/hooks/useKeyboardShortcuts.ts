@@ -100,12 +100,14 @@ export function useKeyboardShortcuts() {
 
         case 'w':
         case 'W':
+        case 'ㅈ':
           event.preventDefault();
           setFitMode(FitMode.FIT_WIDTH);
           break;
 
         case 'h':
         case 'H':
+        case 'ㅗ':
           event.preventDefault();
           setFitMode(FitMode.FIT_HEIGHT);
           break;
