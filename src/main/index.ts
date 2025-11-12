@@ -94,6 +94,20 @@ function setupMenu() {
             }
           },
         },
+        {
+          label: 'Open Folder... ',
+          accelerator: 'CmdOrCtrl+Shift+O',
+          click: async () => {
+            const result = await dialog.showOpenDialog(mainWindow!, {
+              properties: ['openDirectory'],
+            });
+
+            if (!result.canceled && result.filePaths.length > 0) {
+              const folderPath = result.filePaths[0];
+              mainWindow?.webContents.send('folder-opened', folderPath);
+            }
+          },
+        },
         { type: 'separator' },
         { role: 'quit' },
       ],

@@ -59,6 +59,34 @@ export function useArchive() {
     }
   }, [setSource, setImages, setError, navigateToPage]);
 
+  const openFolder = useCallback(async (folderPath: string) => {
+    setIsOpening(true);
+    setError(null);
+
+    try {
+      const result = await ipcClient.invoke<any>(channels.FOLDER_OPEN, {
+        folderPath,
+      });
+
+      const { source, session, images } = result;
+
+      setSource(source);
+      setImages(images);
+
+      if (session && session.currentPageIndex !== undefined) {
+        navigateToPage(session.currentPageIndex);
+      }
+
+      return source;
+    } catch (error: any) {
+      const errorMessage = error?.message || 'Failed to open folder';
+      setError(errorMessage);
+      throw error;
+    } finally {
+      setIsOpening(false);
+    }
+  }, [setSource, setImages, setError, navigateToPage]);
+
   const closeArchive = useCallback(async (archiveId: string) => {
     try {
       await ipcClient.invoke(channels.ARCHIVE_CLOSE, { archiveId });
@@ -70,6 +98,7 @@ export function useArchive() {
 
   return {
     openArchive,
+    openFolder,
     closeArchive,
     isOpening,
   };

@@ -18,9 +18,9 @@
 - [ ] `SessionService.getOrCreateSession` 시그니처에 `sourceType`/`sourcePath` 적용.
 
 ## 3. 메뉴/UX 업데이트
-- [ ] Electron 메뉴에 "Open Folder…" 항목 추가 (`Cmd+Shift+O`).
-- [ ] 선택된 경로를 메인 프로세스에서 `folder:open` IPC로 전달.
-- [ ] 렌더러 UI에서 현재 소스 정보를 `currentSource.label` 등으로 표시. 폴더인지 아카이브인지 식별 가능하도록 뱃지/텍스트 추가.
+- [x] Electron 메뉴에 "Open Folder…" 항목 추가 (`Cmd+Shift+O`).
+- [x] 선택된 경로를 메인 프로세스에서 렌더러로 전달해 `folder:open` 흐름을 호출.
+- [x] 렌더러 UI에서 현재 소스 정보를 `currentSource` 기반으로 표시하고, 폴더인지 아카이브인지 뱃지로 구분.
 - [ ] 대용량 폴더 로딩 중에는 기존 `LoadingIndicator` 혹은 "Scanning folder..." 메시지를 보여준다.
 
 ## 4. 렌더러 훅/상태 통합

@@ -15,7 +15,7 @@ function App() {
   const error = useViewerStore(state => state.error);
   const isFullscreen = useViewerStore(state => state.isFullscreen);
   const setFullscreen = useViewerStore(state => state.setFullscreen);
-  const { openArchive, isOpening } = useArchive();
+  const { openArchive, openFolder, isOpening } = useArchive();
   const [viewerSize, setViewerSize] = useState({ width: 800, height: 600 });
 
   // Enable keyboard shortcuts
@@ -24,7 +24,7 @@ function App() {
 
   // Listen for file-opened event from main process
   useEffect(() => {
-    const removeListener = window.electronAPI.on('file-opened', async (...args: unknown[]) => {
+    const removeArchiveListener = window.electronAPI.on('file-opened', async (...args: unknown[]) => {
       const [filePath] = args;
       if (typeof filePath !== 'string') {
         console.error('Invalid file path received from main process');
@@ -37,10 +37,24 @@ function App() {
       }
     });
 
+    const removeFolderListener = window.electronAPI.on('folder-opened', async (...args: unknown[]) => {
+      const [folderPath] = args;
+      if (typeof folderPath !== 'string') {
+        console.error('Invalid folder path received from main process');
+        return;
+      }
+      try {
+        await openFolder(folderPath);
+      } catch (error) {
+        console.error('Failed to open folder:', error);
+      }
+    });
+
     return () => {
-      removeListener();
+      removeArchiveListener();
+      removeFolderListener();
     };
-  }, [openArchive]);
+  }, [openArchive, openFolder]);
 
   useEffect(() => {
     const removeListener = window.electronAPI.on('window-fullscreen-changed', (fullscreenState: unknown) => {
@@ -129,7 +143,7 @@ function App() {
           ) : (
             <div className="welcome-message">
               <h2>Welcome to MyViewer</h2>
-              <p>Open an archive file to get started</p>
+              <p>Open an archive file or image folder to get started</p>
               <div className="supported-formats">
                 <p>Supported formats:</p>
                 <ul>
@@ -138,7 +152,7 @@ function App() {
                   <li>7Z, TAR</li>
                 </ul>
                 <p className="hint">
-                  Use File → Open Archive (Cmd+O) or drag & drop a file
+                  Use File → Open Archive (Cmd+O), File → Open Folder (Cmd+Shift+O), or drag & drop
                 </p>
               </div>
             </div>

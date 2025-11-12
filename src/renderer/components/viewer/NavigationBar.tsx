@@ -2,6 +2,7 @@ import React from 'react';
 import { useViewerStore } from '../../store/viewerStore';
 import { useImageNavigation } from '../../hooks/useImageNavigation';
 import { FitMode } from '@shared/types/ViewingSession';
+import { SourceType } from '@shared/types/Source';
 
 interface NavigationBarProps {
   className?: string;
@@ -68,6 +69,7 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
   return (
     <div className={navigationClasses}>
       <div className="navigation-info">
+        <span className="source-badge">{currentSource.type === SourceType.FOLDER ? 'Folder' : 'Archive'}</span>
         <span className="archive-name">{currentSource.label}</span>
         {totalPages > 0 && (
           <span className="page-counter">
@@ -174,6 +176,16 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
           display: flex;
           gap: 1rem;
           align-items: center;
+        }
+
+        .source-badge {
+          padding: 0.15rem 0.4rem;
+          background-color: #444;
+          border-radius: 4px;
+          font-size: 0.7rem;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: #ddd;
         }
 
         .archive-name {
