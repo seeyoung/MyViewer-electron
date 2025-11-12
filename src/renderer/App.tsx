@@ -132,7 +132,7 @@ function App() {
 
         <main className={`app-main ${isFullscreen ? 'fullscreen' : ''}`}>
           {isOpening || isLoading ? (
-            <LoadingIndicator message="Loading archive..." />
+            <LoadingIndicator message="Loading source..." />
           ) : error ? (
             <div className="error-message">
               <h2>Error</h2>

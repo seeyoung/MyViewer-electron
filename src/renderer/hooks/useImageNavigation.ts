@@ -7,6 +7,7 @@ export function useImageNavigation() {
   const currentPageIndex = useViewerStore(state => state.currentPageIndex);
   const images = useViewerStore(state => state.images);
   const currentSource = useViewerStore(state => state.currentSource);
+  const currentSession = useViewerStore(state => state.currentSession);
   const navigateToPage = useViewerStore(state => state.navigateToPage);
 
   const currentImage = images[currentPageIndex];
@@ -45,13 +46,15 @@ export function useImageNavigation() {
 
   // Auto-save session on page navigation (debounced via SessionService)
   useEffect(() => {
-    if (!currentSource) return;
+    if (!currentSource || !currentSession) return;
 
     const saveSession = async () => {
       try {
         await ipcClient.invoke(channels.SESSION_UPDATE, {
-          id: currentSource.id,
-          sourcePath: currentSource.path,
+          id: currentSession.id,
+          sourcePath: currentSession.sourcePath,
+          sourceType: currentSession.sourceType,
+          sourceId: currentSession.sourceId,
           currentPageIndex,
         });
       } catch (error) {
@@ -60,7 +63,7 @@ export function useImageNavigation() {
     };
 
     saveSession();
-  }, [currentPageIndex, currentSource]);
+  }, [currentPageIndex, currentSource, currentSession]);
 
   return {
     currentImage,

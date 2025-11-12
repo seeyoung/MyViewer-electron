@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Image } from '@shared/types/Image';
 import { Bookmark } from '@shared/types/Bookmark';
 import { SourceDescriptor } from '@shared/types/Source';
+import { ViewingSession } from '@shared/types/ViewingSession';
 import {
   ViewMode,
   ReadingDirection,
@@ -12,6 +13,7 @@ import {
 interface ViewerState {
   // Source state
   currentSource: SourceDescriptor | null;
+  currentSession: ViewingSession | null;
   images: Image[];
 
   // Navigation state
@@ -45,6 +47,7 @@ interface ViewerState {
 
   // Actions
   setSource: (source: SourceDescriptor) => void;
+  setSession: (session: ViewingSession | null) => void;
   setImages: (images: Image[]) => void;
   navigateToPage: (index: number) => void;
   setViewMode: (mode: ViewMode) => void;
@@ -59,6 +62,7 @@ interface ViewerState {
 export const useViewerStore = create<ViewerState>((set) => ({
   // Initial state
   currentSource: null,
+  currentSession: null,
   images: [],
 
   currentPageIndex: 0,
@@ -86,6 +90,8 @@ export const useViewerStore = create<ViewerState>((set) => ({
   // Actions
   setSource: (source) => set({ currentSource: source }),
 
+  setSession: (session) => set({ currentSession: session || null }),
+
   setImages: (images) => set({ images }),
 
   navigateToPage: (index) =>
@@ -108,6 +114,7 @@ export const useViewerStore = create<ViewerState>((set) => ({
   reset: () =>
     set({
       currentSource: null,
+      currentSession: null,
       images: [],
       currentPageIndex: 0,
       readingDirection: ReadingDirection.LTR,
