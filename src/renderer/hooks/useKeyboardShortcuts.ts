@@ -91,6 +91,13 @@ export function useKeyboardShortcuts() {
           }
           break;
 
+        case 'o':
+        case 'O':
+          event.preventDefault();
+          setZoomLevel(1.0);
+          setFitMode(FitMode.ACTUAL_SIZE);
+          break;
+
         case 'Escape':
           if (isFullscreen) {
             event.preventDefault();
