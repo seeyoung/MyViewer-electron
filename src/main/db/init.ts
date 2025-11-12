@@ -65,6 +65,8 @@ function runMigrations(database: Database.Database): void {
     CREATE TABLE IF NOT EXISTS viewing_sessions (
       id TEXT PRIMARY KEY,
       archive_path TEXT NOT NULL UNIQUE,
+      source_type TEXT NOT NULL DEFAULT 'archive',
+      source_id TEXT,
       current_page_index INTEGER NOT NULL DEFAULT 0,
       reading_direction TEXT NOT NULL DEFAULT 'left-to-right',
       view_mode TEXT NOT NULL DEFAULT 'single-page',
@@ -92,7 +94,19 @@ function runMigrations(database: Database.Database): void {
   `;
   database.exec(migration002);
 
+  ensureColumn(database, 'viewing_sessions', 'source_type', "TEXT NOT NULL DEFAULT 'archive'");
+  ensureColumn(database, 'viewing_sessions', 'source_id', 'TEXT');
+
   console.log('Database migrations completed');
+}
+
+function ensureColumn(database: Database.Database, table: string, column: string, definition: string) {
+  const columnInfo = database.prepare(`PRAGMA table_info(${table})`).all();
+  const exists = columnInfo.some((info: any) => info.name === column);
+
+  if (!exists) {
+    database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
 }
 
 /**

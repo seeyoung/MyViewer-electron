@@ -10,7 +10,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 function App() {
   console.log('🚀 App component is rendering!');
 
-  const currentArchive = useViewerStore(state => state.currentArchive);
+  const currentSource = useViewerStore(state => state.currentSource);
   const isLoading = useViewerStore(state => state.isLoading);
   const error = useViewerStore(state => state.error);
   const isFullscreen = useViewerStore(state => state.isFullscreen);
@@ -104,7 +104,7 @@ function App() {
     return () => {
       window.removeEventListener('resize', updateSize);
     };
-  }, [currentArchive, isFullscreen]);
+  }, [currentSource, isFullscreen]);
 
   return (
     <ErrorBoundary>
@@ -114,7 +114,7 @@ function App() {
           <p className="subtitle">Archive Image Viewer</p>
         </header>
 
-        {currentArchive && <NavigationBar className={isFullscreen ? 'floating' : ''} />}
+        {currentSource && <NavigationBar className={isFullscreen ? 'floating' : ''} />}
 
         <main className={`app-main ${isFullscreen ? 'fullscreen' : ''}`}>
           {isOpening || isLoading ? (
@@ -124,7 +124,7 @@ function App() {
               <h2>Error</h2>
               <p>{error}</p>
             </div>
-          ) : currentArchive ? (
+          ) : currentSource ? (
             <ImageViewer width={viewerSize.width} height={viewerSize.height} />
           ) : (
             <div className="welcome-message">

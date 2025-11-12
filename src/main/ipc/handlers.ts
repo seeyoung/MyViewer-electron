@@ -61,6 +61,7 @@ import { ImageService } from '../services/ImageService';
 import { SessionService } from '../services/SessionService';
 import { withErrorHandling, IpcErrorCode, createIpcError } from './error-handler';
 import * as channels from '@shared/constants/ipc-channels';
+import { SourceType } from '@shared/types/Source';
 
 // Service instances
 const archiveService = new ArchiveService();
@@ -80,7 +81,7 @@ export function initializeIpcHandlers(): void {
       const archive = await archiveService.openArchive(filePath, password);
 
       // Get or create session
-      const session = sessionService.getOrCreateSession(filePath, archive.id);
+      const session = sessionService.getOrCreateSession(filePath, SourceType.ARCHIVE, archive.id);
 
       // Get all images from folder tree
       const images = getAllImagesFromFolder(archive.rootFolder);
@@ -116,7 +117,9 @@ export function initializeIpcHandlers(): void {
       // Ensure session is serializable
       const serializableSession = {
         id: session.id,
-        archivePath: session.archivePath,
+        sourcePath: session.sourcePath,
+        sourceType: session.sourceType,
+        sourceId: session.sourceId,
         currentPageIndex: session.currentPageIndex,
         readingDirection: session.readingDirection,
         viewMode: session.viewMode,
@@ -207,8 +210,12 @@ export function initializeIpcHandlers(): void {
   registry.register(
     channels.SESSION_GET,
     withErrorHandling(async (event, data: any) => {
-      const { archivePath, archiveId } = data;
-      const session = sessionService.getOrCreateSession(archivePath, archiveId);
+      const { sourcePath, sourceType, sourceId } = data;
+      const session = sessionService.getOrCreateSession(
+        sourcePath,
+        (sourceType as SourceType) || SourceType.ARCHIVE,
+        sourceId
+      );
       return { session };
     })
   );

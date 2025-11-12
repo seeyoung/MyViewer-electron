@@ -1,5 +1,6 @@
 import { SessionRepository } from '../repositories/SessionRepository';
 import { ViewingSession, ViewMode, ReadingDirection, FitMode, Rotation } from '@shared/types/ViewingSession';
+import { SourceType } from '@shared/types/Source';
 import { randomUUID } from 'crypto';
 
 /**
@@ -16,15 +17,17 @@ export class SessionService {
   }
 
   /**
-   * Get or create session for an archive
+   * Get or create session for a source (archive or folder)
    */
-  getOrCreateSession(archivePath: string, archiveId: string): ViewingSession {
+  getOrCreateSession(sourcePath: string, sourceType: SourceType, sourceId?: string): ViewingSession {
     // Try to get existing session
-    const existing = this.repository.getSessionByArchivePath(archivePath);
+    const existing = this.repository.getSessionBySourcePath(sourcePath);
 
     if (existing) {
-      // Update archive ID and last activity
-      existing.archiveId = archiveId;
+      // Update source metadata and last activity
+      existing.sourceId = sourceId;
+      existing.sourceType = sourceType;
+      existing.sourcePath = sourcePath;
       existing.lastActivityAt = Date.now();
       this.repository.updateSession(existing);
       return existing;
@@ -33,8 +36,9 @@ export class SessionService {
     // Create new session with defaults
     const session: ViewingSession = {
       id: randomUUID(),
-      archiveId,
-      archivePath,
+      sourceId,
+      sourcePath,
+      sourceType,
       currentPageIndex: 0,
       readingDirection: ReadingDirection.LTR,
       viewMode: ViewMode.SINGLE,

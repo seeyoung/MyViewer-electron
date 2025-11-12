@@ -2,10 +2,11 @@ import { useState, useCallback } from 'react';
 import { useViewerStore } from '../store/viewerStore';
 import ipcClient from '../services/ipc';
 import * as channels from '@shared/constants/ipc-channels';
+import { SourceType } from '@shared/types/Source';
 
 export function useArchive() {
   const [isOpening, setIsOpening] = useState(false);
-  const setArchive = useViewerStore(state => state.setArchive);
+  const setSource = useViewerStore(state => state.setSource);
   const setImages = useViewerStore(state => state.setImages);
   const setError = useViewerStore(state => state.setError);
   const navigateToPage = useViewerStore(state => state.navigateToPage);
@@ -35,7 +36,12 @@ export function useArchive() {
       });
 
       // Update store
-      setArchive(archive);
+      setSource({
+        id: archive.id,
+        type: SourceType.ARCHIVE,
+        path: archive.filePath,
+        label: archive.fileName,
+      });
       setImages(images);
 
       // Navigate to last viewed page (auto-resume)
@@ -51,7 +57,7 @@ export function useArchive() {
     } finally {
       setIsOpening(false);
     }
-  }, [setArchive, setImages, setError, navigateToPage]);
+  }, [setSource, setImages, setError, navigateToPage]);
 
   const closeArchive = useCallback(async (archiveId: string) => {
     try {

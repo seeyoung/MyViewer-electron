@@ -1,6 +1,6 @@
 import DatabaseConnection from '../db/connection';
 import { ViewingSession, ViewMode, ReadingDirection, FitMode, Rotation } from '@shared/types/ViewingSession';
-import { randomUUID } from 'crypto';
+import { SourceType } from '@shared/types/Source';
 
 /**
  * Session Repository
@@ -12,12 +12,12 @@ export class SessionRepository {
   /**
    * Get session by archive path
    */
-  getSessionByArchivePath(archivePath: string): ViewingSession | null {
+  getSessionBySourcePath(sourcePath: string): ViewingSession | null {
     const stmt = this.db.prepare(`
       SELECT * FROM viewing_sessions WHERE archive_path = ?
     `);
 
-    const row = stmt.get(archivePath) as any;
+    const row = stmt.get(sourcePath) as any;
 
     if (!row) {
       return null;
@@ -32,15 +32,18 @@ export class SessionRepository {
   createSession(session: ViewingSession): ViewingSession {
     const stmt = this.db.prepare(`
       INSERT INTO viewing_sessions (
-        id, archive_path, current_page_index, reading_direction, view_mode,
+        id, archive_path, source_type, source_id,
+        current_page_index, reading_direction, view_mode,
         zoom_level, fit_mode, rotation, show_thumbnails, show_folder_tree,
         show_bookmarks, active_folder_id, search_query, started_at, last_activity_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
       session.id,
-      session.archivePath,
+      session.sourcePath,
+      session.sourceType,
+      session.sourceId || null,
       session.currentPageIndex,
       session.readingDirection,
       session.viewMode,
@@ -65,6 +68,8 @@ export class SessionRepository {
   updateSession(session: ViewingSession): void {
     const stmt = this.db.prepare(`
       UPDATE viewing_sessions SET
+        source_type = ?,
+        source_id = ?,
         current_page_index = ?,
         reading_direction = ?,
         view_mode = ?,
@@ -81,6 +86,8 @@ export class SessionRepository {
     `);
 
     stmt.run(
+      session.sourceType,
+      session.sourceId || null,
       session.currentPageIndex,
       session.readingDirection,
       session.viewMode,
@@ -121,8 +128,9 @@ export class SessionRepository {
   private rowToSession(row: any): ViewingSession {
     return {
       id: row.id,
-      archiveId: '', // Will be set by caller
-      archivePath: row.archive_path,
+      sourceId: row.source_id || undefined,
+      sourcePath: row.archive_path,
+      sourceType: (row.source_type as SourceType) || SourceType.ARCHIVE,
       currentPageIndex: row.current_page_index,
       readingDirection: row.reading_direction as ReadingDirection,
       viewMode: row.view_mode as ViewMode,

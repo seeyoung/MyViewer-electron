@@ -22,11 +22,14 @@ export enum Rotation {
   COUNTERCLOCKWISE_90 = 270,
 }
 
+import { SourceType } from './Source';
+
 export interface ViewingSession {
   // Identification
   id: string; // UUID
-  archiveId: string; // Active archive ID
-  archivePath: string; // Archive file path (for persistence)
+  sourceId?: string; // Active source ID (archive ID or folder ID)
+  sourcePath: string; // Source path on disk
+  sourceType: SourceType;
 
   // Navigation state
   currentPageIndex: number; // Current page (0-based)

@@ -6,7 +6,7 @@ import * as channels from '@shared/constants/ipc-channels';
 export function useImageNavigation() {
   const currentPageIndex = useViewerStore(state => state.currentPageIndex);
   const images = useViewerStore(state => state.images);
-  const currentArchive = useViewerStore(state => state.currentArchive);
+  const currentSource = useViewerStore(state => state.currentSource);
   const navigateToPage = useViewerStore(state => state.navigateToPage);
 
   const currentImage = images[currentPageIndex];
@@ -45,13 +45,13 @@ export function useImageNavigation() {
 
   // Auto-save session on page navigation (debounced via SessionService)
   useEffect(() => {
-    if (!currentArchive) return;
+    if (!currentSource) return;
 
     const saveSession = async () => {
       try {
         await ipcClient.invoke(channels.SESSION_UPDATE, {
-          id: currentArchive.id,
-          archivePath: currentArchive.filePath,
+          id: currentSource.id,
+          sourcePath: currentSource.path,
           currentPageIndex,
         });
       } catch (error) {
@@ -60,7 +60,7 @@ export function useImageNavigation() {
     };
 
     saveSession();
-  }, [currentPageIndex, currentArchive]);
+  }, [currentPageIndex, currentSource]);
 
   return {
     currentImage,

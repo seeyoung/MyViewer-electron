@@ -10,7 +10,7 @@ interface NavigationBarProps {
 const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
   const currentPageIndex = useViewerStore(state => state.currentPageIndex);
   const images = useViewerStore(state => state.images);
-  const currentArchive = useViewerStore(state => state.currentArchive);
+  const currentSource = useViewerStore(state => state.currentSource);
   const zoomLevel = useViewerStore(state => state.zoomLevel);
   const setZoomLevel = useViewerStore(state => state.setZoomLevel);
   const fitMode = useViewerStore(state => state.fitMode);
@@ -59,7 +59,7 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
     window.electronAPI.send('window-toggle-fullscreen');
   };
 
-  if (!currentArchive) {
+  if (!currentSource) {
     return null;
   }
 
@@ -68,7 +68,7 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
   return (
     <div className={navigationClasses}>
       <div className="navigation-info">
-        <span className="archive-name">{currentArchive.fileName}</span>
+        <span className="archive-name">{currentSource.label}</span>
         {totalPages > 0 && (
           <span className="page-counter">
             {currentPage} / {totalPages}

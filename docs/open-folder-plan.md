@@ -3,10 +3,10 @@
 위 기능은 기존 압축 아카이브 흐름을 재사용하면서, 일반 폴더를 이미지 소스로 취급할 수 있도록 확장하는 작업이다. 아래 단계들을 순서대로 진행하면 된다.
 
 ## 1. 소스/세션 모델 정비
-- [ ] `SourceDescriptor` 타입 정의: `id`, `type ('archive'|'folder')`, `path`, `label`.
-- [ ] Zustand 스토어(`viewerStore`)에서 `currentArchive`를 `currentSource`로 바꾸고, 공통 필드(이미지 목록 등)를 그대로 유지.
-- [ ] `ViewingSession` 타입/DB 스키마에 `sourceType`/`sourcePath` 추가. 기존 데이터를 마이그레이션하거나 기본값(`archive`)을 둔다.
-- [ ] `SessionService` 및 저장/읽기 로직이 새 필드를 사용하도록 업데이트.
+- [x] `SourceDescriptor` 타입 정의: `id`, `type ('archive'|'folder')`, `path`, `label`.
+- [x] Zustand 스토어(`viewerStore`)에서 `currentArchive`를 `currentSource`로 바꾸고, 공통 필드(이미지 목록 등)를 그대로 유지.
+- [x] `ViewingSession` 타입/DB 스키마에 `sourceType`/`sourcePath` 추가. 기존 데이터를 마이그레이션하거나 기본값(`archive`)을 둔다.
+- [x] `SessionService` 및 저장/읽기 로직이 새 필드를 사용하도록 업데이트.
 
 ## 2. FolderService + IPC 채널
 - [ ] `src/main/services/FolderService.ts` 생성: 주어진 폴더 경로에서 이미지 파일을 재귀적으로 스캔해 `Image[]`와 `FolderNode` 트리를 만든다.
@@ -32,4 +32,3 @@
 - [ ] 폴더 선택 → 이미지 표시까지 수동 테스트 (서브 폴더 포함/미포함, 비이미지 파일 포함 등).
 - [ ] 기존 아카이브 기능 회귀 테스트.
 - [ ] 필요 시 문서(`docs/open-folder-plan.md`)에 진행 상황을 체크하거나 후속 이슈로 쪼갠다.
-
