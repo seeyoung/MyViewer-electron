@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import ErrorBoundary from './components/shared/ErrorBoundary';
 import NavigationBar from './components/viewer/NavigationBar';
 import ImageViewer from './components/viewer/ImageViewer';
@@ -14,11 +14,9 @@ function App() {
   const isLoading = useViewerStore(state => state.isLoading);
   const error = useViewerStore(state => state.error);
   const isFullscreen = useViewerStore(state => state.isFullscreen);
-  const isImageFullscreen = useViewerStore(state => state.isImageFullscreen);
   const setFullscreen = useViewerStore(state => state.setFullscreen);
   const { openArchive, isOpening } = useArchive();
   const [viewerSize, setViewerSize] = useState({ width: 800, height: 600 });
-  const imageFullscreenForcedRef = useRef(false);
 
   // Enable keyboard shortcuts
   console.log('⌨️ About to enable keyboard shortcuts...');
@@ -48,22 +46,6 @@ function App() {
       removeListener();
     };
   }, [setFullscreen]);
-
-  // Ensure 이미지 전체화면 triggers window fullscreen and releases it afterward
-  useEffect(() => {
-    if (isImageFullscreen) {
-      if (!isFullscreen) {
-        window.electronAPI.send('window-set-fullscreen', true);
-        imageFullscreenForcedRef.current = true;
-      }
-      return;
-    }
-
-    if (imageFullscreenForcedRef.current && isFullscreen) {
-      window.electronAPI.send('window-set-fullscreen', false);
-    }
-    imageFullscreenForcedRef.current = false;
-  }, [isImageFullscreen, isFullscreen]);
 
   // Handle drag and drop
   useEffect(() => {
@@ -101,9 +83,9 @@ function App() {
     const updateSize = () => {
       const header = document.querySelector('.app-header');
       const nav = document.querySelector('.navigation-bar');
-      const headerHeight = (isFullscreen || isImageFullscreen) ? 0 : (header?.clientHeight || 0);
-      const navHeight = (isFullscreen || isImageFullscreen) ? 0 : (nav?.clientHeight || 0);
-      const availableHeight = (isFullscreen || isImageFullscreen) ? window.innerHeight : (window.innerHeight - headerHeight - navHeight);
+      const headerHeight = isFullscreen ? 0 : (header?.clientHeight || 0);
+      const navHeight = isFullscreen ? 0 : (nav?.clientHeight || 0);
+      const availableHeight = isFullscreen ? window.innerHeight : (window.innerHeight - headerHeight - navHeight);
 
       setViewerSize({
         width: window.innerWidth,
@@ -117,19 +99,19 @@ function App() {
     return () => {
       window.removeEventListener('resize', updateSize);
     };
-  }, [currentArchive, isFullscreen, isImageFullscreen]);
+  }, [currentArchive, isFullscreen]);
 
   return (
     <ErrorBoundary>
-      <div className={`app ${isFullscreen ? 'fullscreen' : ''} ${isImageFullscreen ? 'image-fullscreen' : ''}`}>
-        <header className={`app-header ${(isFullscreen || isImageFullscreen) ? 'hidden' : ''}`}>
+      <div className={`app ${isFullscreen ? 'fullscreen' : ''}`}>
+        <header className={`app-header ${isFullscreen ? 'hidden' : ''}`}>
           <h1>MyViewer</h1>
           <p className="subtitle">Archive Image Viewer</p>
         </header>
 
-        {currentArchive && <NavigationBar className={isFullscreen ? 'hidden' : isImageFullscreen ? 'floating' : ''} />}
+        {currentArchive && <NavigationBar className={isFullscreen ? 'floating' : ''} />}
 
-        <main className={`app-main ${(isFullscreen || isImageFullscreen) ? 'fullscreen' : ''}`}>
+        <main className={`app-main ${isFullscreen ? 'fullscreen' : ''}`}>
           {isOpening || isLoading ? (
             <LoadingIndicator message="Loading archive..." />
           ) : error ? (

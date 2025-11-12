@@ -7,9 +7,6 @@ export function useKeyboardShortcuts() {
   const zoomLevel = useViewerStore(state => state.zoomLevel);
   const setZoomLevel = useViewerStore(state => state.setZoomLevel);
   const isFullscreen = useViewerStore(state => state.isFullscreen);
-  const isImageFullscreen = useViewerStore(state => state.isImageFullscreen);
-  const setImageFullscreen = useViewerStore(state => state.setImageFullscreen);
-  const toggleImageFullscreen = useViewerStore(state => state.toggleImageFullscreen);
 
   useEffect(() => {
     console.log('⌨️  Initializing keyboard shortcuts...');
@@ -41,10 +38,9 @@ export function useKeyboardShortcuts() {
           goToNext();
           break;
 
-        case 'Enter': // Enter key for image fullscreen
+        case 'Enter': // Enter key for fullscreen
           event.preventDefault();
-          // 이미지 전체 화면 토글
-          toggleImageFullscreen();
+          window.electronAPI.send('window-toggle-fullscreen');
           break;
 
         case ' ': // Space (without modifier)
@@ -94,12 +90,6 @@ export function useKeyboardShortcuts() {
           break;
 
         case 'Escape':
-          if (isImageFullscreen) {
-            event.preventDefault();
-            setImageFullscreen(false);
-            break;
-          }
-
           if (isFullscreen) {
             event.preventDefault();
             window.electronAPI.send('window-set-fullscreen', false);
@@ -144,8 +134,5 @@ export function useKeyboardShortcuts() {
     zoomLevel,
     setZoomLevel,
     isFullscreen,
-    isImageFullscreen,
-    setImageFullscreen,
-    toggleImageFullscreen,
   ]);
 }

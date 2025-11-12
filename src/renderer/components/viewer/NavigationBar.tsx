@@ -16,8 +16,6 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
   const fitMode = useViewerStore(state => state.fitMode);
   const setFitMode = useViewerStore(state => state.setFitMode);
   const isFullscreen = useViewerStore(state => state.isFullscreen);
-  const isImageFullscreen = useViewerStore(state => state.isImageFullscreen);
-  const setImageFullscreen = useViewerStore(state => state.setImageFullscreen);
 
   const totalPages = images.length;
   const currentPage = currentPageIndex + 1; // Display 1-based index
@@ -59,10 +57,6 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
 
   const handleToggleAppFullscreen = () => {
     window.electronAPI.send('window-toggle-fullscreen');
-  };
-
-  const handleToggleImageFullscreen = () => {
-    setImageFullscreen(!isImageFullscreen);
   };
 
   if (!currentArchive) {
@@ -159,17 +153,9 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
           <button
             onClick={handleToggleAppFullscreen}
             className={`fullscreen-button ${isFullscreen ? 'active' : ''}`}
-            title="Toggle App Fullscreen (F11)"
+            title="Toggle Fullscreen (Enter / F11)"
           >
-            {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-          </button>
-
-          <button
-            onClick={handleToggleImageFullscreen}
-            className={`fullscreen-button ${isImageFullscreen ? 'active' : ''}`}
-            title="Toggle Image Fullscreen (Enter)"
-          >
-            {isImageFullscreen ? 'Exit Image View' : 'Image Fullscreen'}
+            {isFullscreen ? 'Exit Fullscreen' : 'Image Fullscreen'}
           </button>
         </div>
       </div>

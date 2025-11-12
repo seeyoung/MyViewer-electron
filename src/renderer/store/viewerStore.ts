@@ -26,7 +26,6 @@ interface ViewerState {
 
   // Fullscreen state
   isFullscreen: boolean;
-  isImageFullscreen: boolean;
 
   // UI visibility
   showThumbnails: boolean;
@@ -52,8 +51,6 @@ interface ViewerState {
   setZoomLevel: (level: number) => void;
   setFitMode: (mode: FitMode) => void;
   setFullscreen: (fullscreen: boolean) => void;
-  setImageFullscreen: (fullscreen: boolean) => void;
-  toggleImageFullscreen: () => void;
   setError: (error: string | null) => void;
   setLoading: (loading: boolean) => void;
   reset: () => void;
@@ -73,7 +70,6 @@ export const useViewerStore = create<ViewerState>((set) => ({
   rotation: Rotation.NONE,
 
   isFullscreen: false,
-  isImageFullscreen: false,
 
   showThumbnails: true,
   showFolderTree: false,
@@ -105,10 +101,6 @@ export const useViewerStore = create<ViewerState>((set) => ({
 
   setFullscreen: (fullscreen) => set({ isFullscreen: fullscreen }),
 
-  setImageFullscreen: (fullscreen) => set({ isImageFullscreen: fullscreen }),
-
-  toggleImageFullscreen: () => set((state) => ({ isImageFullscreen: !state.isImageFullscreen })),
-
   setError: (error) => set({ error }),
 
   setLoading: (loading) => set({ isLoading: loading }),
@@ -124,7 +116,6 @@ export const useViewerStore = create<ViewerState>((set) => ({
       fitMode: FitMode.FIT_HEIGHT,
       rotation: Rotation.NONE,
       isFullscreen: false,
-      isImageFullscreen: false,
       showThumbnails: true,
       showFolderTree: false,
       showBookmarks: false,

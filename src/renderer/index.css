@@ -113,8 +113,7 @@ body {
 }
 
 /* Fullscreen mode styles */
-.app.fullscreen,
-.app.image-fullscreen {
+.app.fullscreen {
   background-color: #000000;
 }
 
@@ -123,27 +122,26 @@ body {
   display: none;
 }
 
-.app-main.fullscreen,
-.app-main.image-fullscreen {
+.app-main.fullscreen {
   width: 100vw;
   height: 100vh;
   background-color: #000000;
 }
 
-/* Image fullscreen specific styles */
-.app.image-fullscreen {
+/* Fullscreen specific styles */
+.app.fullscreen {
   cursor: crosshair;
   background-color: #000000;
 }
 
-.app.image-fullscreen .app-main {
+.app.fullscreen .app-main {
   width: 100vw;
   height: 100vh;
   background-color: #000000;
 }
 
-.app.image-fullscreen::after {
-  content: 'Press Enter to exit image fullscreen • Use arrow keys to navigate';
+.app.fullscreen::after {
+  content: 'Press Enter or F11 to exit fullscreen • Use arrow keys to navigate';
   position: fixed;
   bottom: 10px;
   right: 10px;
@@ -152,27 +150,6 @@ body {
   padding: 10px 15px;
   border-radius: 6px;
   font-size: 13px;
-  z-index: 1000;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-}
-
-.app.image-fullscreen:hover::after {
-  opacity: 1;
-}
-
-/* App fullscreen navigation hint */
-.app.fullscreen::after {
-  content: 'Press F11 to exit fullscreen';
-  position: fixed;
-  bottom: 10px;
-  right: 10px;
-  background: rgba(0, 0, 0, 0.7);
-  color: #ffffff;
-  padding: 8px 12px;
-  border-radius: 4px;
-  font-size: 12px;
   z-index: 1000;
   opacity: 0;
   transition: opacity 0.3s ease;
@@ -203,9 +180,4 @@ body {
 .navigation-bar.floating.visible {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
-}
-
-/* Hide hints when both fullscreen modes are active */
-.app.fullscreen.image-fullscreen::after {
-  content: 'Press F11 to exit fullscreen • Enter to exit image fullscreen';
 }

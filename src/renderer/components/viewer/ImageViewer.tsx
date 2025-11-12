@@ -32,7 +32,6 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
   const fitMode = useViewerStore(state => state.fitMode);
   const setFitMode = useViewerStore(state => state.setFitMode);
   const isFullscreen = useViewerStore(state => state.isFullscreen);
-  const isImageFullscreen = useViewerStore(state => state.isImageFullscreen);
   const stageRef = useRef<any>(null);
   const toolbarTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [screenSize, setScreenSize] = useState({ width: window.innerWidth, height: window.innerHeight });
@@ -109,8 +108,8 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
 
     const imageWidth = image.width;
     const imageHeight = image.height;
-    const containerWidth = isImageFullscreen ? screenSize.width : width;
-    const containerHeight = isImageFullscreen ? screenSize.height : height;
+    const containerWidth = isFullscreen ? screenSize.width : width;
+    const containerHeight = isFullscreen ? screenSize.height : height;
 
     switch (fitMode) {
       case FitMode.FIT_WIDTH:
@@ -139,8 +138,8 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
 
     const imageWidth = image.width * effectiveZoom;
     const imageHeight = image.height * effectiveZoom;
-    const containerWidth = isImageFullscreen ? screenSize.width : width;
-    const containerHeight = isImageFullscreen ? screenSize.height : height;
+    const containerWidth = isFullscreen ? screenSize.width : width;
+    const containerHeight = isFullscreen ? screenSize.height : height;
 
     // If image is smaller than viewport, center it and don't allow panning
     if (imageWidth <= containerWidth && imageHeight <= containerHeight) {
@@ -170,8 +169,8 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
   // Center the image when fit mode is active (only when mode changes, not during zoom)
   useEffect(() => {
     if (fitMode !== FitMode.CUSTOM && image) {
-      const containerWidth = isImageFullscreen ? screenSize.width : width;
-      const containerHeight = isImageFullscreen ? screenSize.height : height;
+      const containerWidth = isFullscreen ? screenSize.width : width;
+      const containerHeight = isFullscreen ? screenSize.height : height;
 
       // Calculate zoom for the specific fit mode
       let modeZoom = 1.0;
@@ -195,13 +194,13 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
         y: (containerHeight - imageHeight) / 2,
       });
     }
-  }, [fitMode, width, height, image, isImageFullscreen, screenSize]);
+  }, [fitMode, width, height, image, isFullscreen, screenSize]);
 
   // Auto-fit to screen in fullscreen modes
   useEffect(() => {
-    if ((isFullscreen || isImageFullscreen) && image) {
-      const containerWidth = isImageFullscreen ? screenSize.width : width;
-      const containerHeight = isImageFullscreen ? screenSize.height : height;
+    if (isFullscreen && image) {
+      const containerWidth = isFullscreen ? screenSize.width : width;
+      const containerHeight = isFullscreen ? screenSize.height : height;
 
       // Calculate zoom to fit image to screen
       const scaleX = containerWidth / image.width;
@@ -220,7 +219,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
         y: (containerHeight - imageHeight) / 2,
       });
     }
-  }, [isFullscreen, isImageFullscreen, width, height, image, screenSize]);
+  }, [isFullscreen, width, height, image, screenSize]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -298,7 +297,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
 
   // Handle mouse movement for floating toolbar in image fullscreen mode
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isImageFullscreen) return;
+    if (!isFullscreen) return;
 
     const mouseY = e.clientY;
     const threshold = 50; // Show toolbar when mouse is within 50px of top
@@ -360,16 +359,16 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
   return (
     <div
       style={{
-        width: isImageFullscreen ? screenSize.width : width,
-        height: isImageFullscreen ? screenSize.height : height,
-        backgroundColor: (isFullscreen || isImageFullscreen) ? '#000000' : '#1e1e1e',
+        width: isFullscreen ? screenSize.width : width,
+        height: isFullscreen ? screenSize.height : height,
+        backgroundColor: isFullscreen ? '#000000' : '#1e1e1e',
         position: 'relative'
       }}
       onMouseMove={handleMouseMove}
     >
       <Stage
-        width={isImageFullscreen ? screenSize.width : width}
-        height={isImageFullscreen ? screenSize.height : height}
+        width={isFullscreen ? screenSize.width : width}
+        height={isFullscreen ? screenSize.height : height}
         onWheel={handleWheel}
         onDragEnd={handleDragEnd}
         ref={stageRef}
