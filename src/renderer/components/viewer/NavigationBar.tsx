@@ -221,7 +221,7 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
           border: 1px solid #4d4d4d;
           border-radius: 4px;
           cursor: pointer;
-          font-size: 0.875rem;
+          font-size: 1.3125rem;
           transition: background-color 0.2s;
         }
 
@@ -249,7 +249,7 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
           border: 1px solid #4d4d4d;
           border-radius: 4px;
           cursor: pointer;
-          font-size: 0.875rem;
+          font-size: 1.3125rem;
           min-width: 28px;
           height: 28px;
           display: flex;
@@ -263,7 +263,7 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
         }
 
         .zoom-button.reset {
-          font-size: 0.75rem;
+          font-size: 1.125rem;
           min-width: 32px;
         }
 
@@ -290,7 +290,7 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
           border: 1px solid #4d4d4d;
           border-radius: 4px;
           cursor: pointer;
-          font-size: 0.875rem;
+          font-size: 1.3125rem;
           min-width: 32px;
           height: 28px;
           display: flex;
@@ -324,7 +324,7 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
           border: 1px solid #4d4d4d;
           border-radius: 4px;
           cursor: pointer;
-          font-size: 0.8rem;
+          font-size: 1.2rem;
           min-width: 120px;
           transition: background-color 0.2s, border-color 0.2s;
         }
@@ -345,7 +345,7 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
           border: 1px solid #4d4d4d;
           border-radius: 4px;
           cursor: pointer;
-          font-size: 0.8rem;
+          font-size: 1.2rem;
           min-width: 120px;
           transition: background-color 0.2s, border-color 0.2s;
         }

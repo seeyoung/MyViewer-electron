@@ -94,7 +94,7 @@ const FolderSidebar: React.FC = () => {
           padding: 0.75rem;
           display: flex;
           justify-content: space-between;
-          font-size: 0.85rem;
+          font-size: 1.275rem;
           border-bottom: 1px solid #333;
         }
         .folder-list {
@@ -111,7 +111,7 @@ const FolderSidebar: React.FC = () => {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          font-size: 0.85rem;
+          font-size: 1.275rem;
           cursor: pointer;
         }
         .folder-item.active {
@@ -121,7 +121,7 @@ const FolderSidebar: React.FC = () => {
           background: rgba(255, 255, 255, 0.05);
         }
         .count {
-          font-size: 0.75rem;
+          font-size: 1.125rem;
           color: #999;
         }
       `}</style>

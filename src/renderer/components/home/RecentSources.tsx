@@ -55,13 +55,14 @@ const RecentSources: React.FC<RecentSourcesProps> = ({ sources, onOpen }) => {
           gap: 0.5rem;
         }
         .badge {
-          font-size: 0.7rem;
+          font-size: 1.05rem;
           text-transform: uppercase;
           color: #ccc;
           letter-spacing: 0.05em;
         }
         .label {
           font-weight: 600;
+          font-size: 1.5rem;
         }
         button {
           padding: 0.25rem 0.75rem;
@@ -70,6 +71,7 @@ const RecentSources: React.FC<RecentSourcesProps> = ({ sources, onOpen }) => {
           border-radius: 4px;
           color: #fff;
           cursor: pointer;
+          font-size: 1.5rem;
         }
         button:hover {
           background: #1586d8;
