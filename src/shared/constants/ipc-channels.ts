@@ -8,6 +8,7 @@
 export const ARCHIVE_OPEN = 'archive:open';
 export const ARCHIVE_CLOSE = 'archive:close';
 export const ARCHIVE_LIST_IMAGES = 'archive:list-images';
+export const FOLDER_OPEN = 'folder:open';
 
 // Image operations
 export const IMAGE_LOAD = 'image:load';

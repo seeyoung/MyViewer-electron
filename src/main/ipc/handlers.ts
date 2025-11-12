@@ -59,6 +59,7 @@ export default registry;
 import { ArchiveService } from '../services/ArchiveService';
 import { ImageService } from '../services/ImageService';
 import { SessionService } from '../services/SessionService';
+import { FolderService } from '../services/FolderService';
 import { withErrorHandling, IpcErrorCode, createIpcError } from './error-handler';
 import * as channels from '@shared/constants/ipc-channels';
 import { SourceType } from '@shared/types/Source';
@@ -67,6 +68,7 @@ import { SourceType } from '@shared/types/Source';
 const archiveService = new ArchiveService();
 const imageService = new ImageService(archiveService);
 const sessionService = new SessionService();
+const folderService = new FolderService();
 
 /**
  * Initialize all IPC handlers
@@ -253,3 +255,45 @@ function getAllImagesFromFolder(folder: any): any[] {
   console.log('📊 Total images returned:', images.length);
   return images;
 }
+  registry.register(
+    channels.FOLDER_OPEN,
+    withErrorHandling(async (event, data: any) => {
+      const { folderPath } = data;
+      const result = await folderService.openFolder(folderPath);
+
+      const session = sessionService.getOrCreateSession(
+        folderPath,
+        SourceType.FOLDER,
+        result.source.id
+      );
+
+      const serializableSession = {
+        id: session.id,
+        sourcePath: session.sourcePath,
+        sourceType: session.sourceType,
+        sourceId: session.sourceId,
+        currentPageIndex: session.currentPageIndex,
+        readingDirection: session.readingDirection,
+        viewMode: session.viewMode,
+        zoomLevel: session.zoomLevel,
+        fitMode: session.fitMode,
+        rotation: session.rotation,
+        showThumbnails: session.showThumbnails,
+        showFolderTree: session.showFolderTree,
+        showBookmarks: session.showBookmarks,
+        activeFolderId: session.activeFolderId,
+        searchQuery: session.searchQuery,
+        startedAt: session.startedAt,
+        lastActivityAt: session.lastActivityAt,
+      };
+
+      const response = {
+        source: result.source,
+        session: serializableSession,
+        images: result.images,
+        rootFolder: result.rootFolder,
+      };
+
+      return JSON.parse(JSON.stringify(response));
+    })
+  );
