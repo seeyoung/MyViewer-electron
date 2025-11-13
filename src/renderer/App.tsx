@@ -199,6 +199,7 @@ function App() {
                 <div
                   className="sidebar-resizer"
                   onMouseDown={(event) => {
+                    event.preventDefault();
                     const startX = event.clientX;
                     const startWidth = sidebarWidth;
 
@@ -210,8 +211,10 @@ function App() {
                     const handleMouseUp = () => {
                       window.removeEventListener('mousemove', handleMouseMove);
                       window.removeEventListener('mouseup', handleMouseUp);
+                      document.body.style.userSelect = '';
                     };
 
+                    document.body.style.userSelect = 'none';
                     window.addEventListener('mousemove', handleMouseMove);
                     window.addEventListener('mouseup', handleMouseUp);
                   }}
