@@ -25,6 +25,7 @@ interface ImageViewerProps {
 
 const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 });
   const currentPageIndex = useViewerStore(state => state.currentPageIndex);
   const images = useViewerStore(state => state.images);
@@ -55,6 +56,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
   useEffect(() => {
     if (!currentImage) {
       setImage(null);
+      setImageError(null);
       return;
     }
 
@@ -91,10 +93,12 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
       const htmlImage = new window.Image();
       htmlImage.onload = () => {
         setImage(htmlImage);
+        setImageError(null);
       };
       htmlImage.onerror = (error) => {
         console.error('Failed to load image data:', error);
         setImage(null);
+        setImageError('Failed to display this file.');
       };
       
       // Set image data as base64 data URL
@@ -102,6 +106,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
     } catch (error) {
       console.error('Failed to load image:', error);
       setImage(null);
+      setImageError('Failed to display this file.');
     }
   };
 
@@ -318,7 +323,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
           color: '#666',
         }}
       >
-        {currentImage ? 'Loading image...' : 'No image selected'}
+        {currentImage ? (imageError || 'Loading image...') : 'No image selected'}
       </div>
     );
   }
