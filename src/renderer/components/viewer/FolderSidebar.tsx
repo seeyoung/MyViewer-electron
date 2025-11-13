@@ -224,8 +224,9 @@ interface ThumbnailGridProps {
 }
 
 const ThumbnailGrid: React.FC<ThumbnailGridProps> = ({ images, source, onSelect, width }) => {
-  const targetWidth = Math.max(80, width - 60);
-  const columnWidth = Math.min(260, Math.max(120, targetWidth / 1.2));
+  const targetWidth = Math.max(120, width - 60);
+  const columnWidth = Math.min(320, targetWidth);
+  const cellHeight = Math.round(columnWidth * 0.75);
   return (
     <div
       className="thumbnail-grid"
@@ -239,6 +240,7 @@ const ThumbnailGrid: React.FC<ThumbnailGridProps> = ({ images, source, onSelect,
           image={img}
           source={source}
           onSelect={() => onSelect(index)}
+          height={cellHeight}
         />
       ))}
     </div>
@@ -249,9 +251,10 @@ interface ThumbnailItemProps {
   image: ViewerImage;
   source: SourceDescriptor | null;
   onSelect: () => void;
+  height: number;
 }
 
-const ThumbnailItem: React.FC<ThumbnailItemProps> = ({ image, source, onSelect }) => {
+const ThumbnailItem: React.FC<ThumbnailItemProps> = ({ image, source, onSelect, height }) => {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -285,7 +288,7 @@ const ThumbnailItem: React.FC<ThumbnailItemProps> = ({ image, source, onSelect }
   }, [image.id, image.pathInArchive, source?.id, source?.type]);
 
   return (
-    <button className="thumbnail-item" onClick={onSelect} title={image.pathInArchive}>
+    <button className="thumbnail-item" onClick={onSelect} title={image.pathInArchive} style={{ height }}>
       {dataUrl ? (
         <img src={dataUrl} alt={image.fileName} loading="lazy" />
       ) : (
