@@ -60,9 +60,10 @@ import { ArchiveService } from '../services/ArchiveService';
 import { ImageService } from '../services/ImageService';
 import { SessionService } from '../services/SessionService';
 import { FolderService } from '../services/FolderService';
+import { RecentSourcesService } from '../services/RecentSourcesService';
 import { withErrorHandling, IpcErrorCode, createIpcError } from './error-handler';
 import * as channels from '@shared/constants/ipc-channels';
-import { SourceType } from '@shared/types/Source';
+import { SourceDescriptor, SourceType } from '@shared/types/Source';
 import { detectFormatFromExtension } from '@lib/image-utils';
 import fs from 'fs/promises';
 
@@ -71,6 +72,7 @@ const archiveService = new ArchiveService();
 const imageService = new ImageService(archiveService);
 const sessionService = new SessionService();
 const folderService = new FolderService();
+const recentSourcesService = new RecentSourcesService();
 
 /**
  * Initialize all IPC handlers
@@ -256,6 +258,29 @@ export function initializeIpcHandlers(): void {
         isFile: stats.isFile(),
         size: stats.size,
       };
+    })
+  );
+
+  registry.register(
+    channels.RECENT_SOURCES_GET,
+    withErrorHandling(async () => {
+      return { sources: recentSourcesService.getAll() };
+    })
+  );
+
+  registry.register(
+    channels.RECENT_SOURCES_ADD,
+    withErrorHandling(async (event, data: any) => {
+      recentSourcesService.add(data as SourceDescriptor);
+      return { success: true };
+    })
+  );
+
+  registry.register(
+    channels.RECENT_SOURCES_CLEAR,
+    withErrorHandling(async () => {
+      recentSourcesService.clear();
+      return { success: true };
     })
   );
 

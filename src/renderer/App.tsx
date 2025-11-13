@@ -8,7 +8,7 @@ import { useViewerStore } from './store/viewerStore';
 import { useArchive } from './hooks/useArchive';
 import RecentSources from './components/home/RecentSources';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-import { SourceType } from '@shared/types/Source';
+import { SourceDescriptor, SourceType } from '@shared/types/Source';
 import * as channels from '@shared/constants/ipc-channels';
 
 function App() {
@@ -64,22 +64,19 @@ function App() {
   }, [openArchive, openFolder]);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem('myviewer.recentSources');
-    if (stored) {
+    const loadRecent = async () => {
       try {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          setRecentSources(parsed);
+        const result: any = await window.electronAPI.invoke(channels.RECENT_SOURCES_GET);
+        if (result?.sources) {
+          setRecentSources(result.sources as SourceDescriptor[]);
         }
       } catch (error) {
-        console.error('Failed to parse recent sources from storage', error);
+        console.error('Failed to load recent sources', error);
       }
-    }
-  }, [setRecentSources]);
+    };
 
-  useEffect(() => {
-    window.localStorage.setItem('myviewer.recentSources', JSON.stringify(recentSources));
-  }, [recentSources]);
+    loadRecent();
+  }, [setRecentSources]);
 
   useEffect(() => {
     const removeListener = window.electronAPI.on('window-fullscreen-changed', (fullscreenState: unknown) => {

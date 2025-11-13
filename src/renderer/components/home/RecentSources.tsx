@@ -7,24 +7,24 @@ interface RecentSourcesProps {
 }
 
 const RecentSources: React.FC<RecentSourcesProps> = ({ sources, onOpen }) => {
-  if (!sources.length) {
-    return null;
-  }
-
   return (
     <div className="recent-sources">
       <h3>Recent Sources</h3>
-      <ul>
-        {sources.map((source) => (
-          <li key={`${source.type}-${source.path}`}>
-            <div className="source-meta">
-              <span className="badge">{source.type === SourceType.FOLDER ? 'Folder' : 'Archive'}</span>
-              <span className="label">{source.label}</span>
-            </div>
-            <button onClick={() => onOpen(source)}>Open</button>
-          </li>
-        ))}
-      </ul>
+      {sources.length === 0 ? (
+        <p className="placeholder">No recent items yet. Open an archive or folder to pin it here.</p>
+      ) : (
+        <ul>
+          {sources.map((source) => (
+            <li key={`${source.type}-${source.path}`}>
+              <div className="source-meta">
+                <span className="badge">{source.type === SourceType.FOLDER ? 'Folder' : 'Archive'}</span>
+                <span className="label">{source.label}</span>
+              </div>
+              <button onClick={() => onOpen(source)}>Open</button>
+            </li>
+          ))}
+        </ul>
+      )}
       <style>{`
         .recent-sources {
           margin-top: 1.5rem;
@@ -75,6 +75,10 @@ const RecentSources: React.FC<RecentSourcesProps> = ({ sources, onOpen }) => {
         }
         button:hover {
           background: #1586d8;
+        }
+        .placeholder {
+          color: #777;
+          font-size: 1rem;
         }
       `}</style>
     </div>

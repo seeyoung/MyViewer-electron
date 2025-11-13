@@ -46,11 +46,15 @@ export function useArchive() {
       });
       setImages(images);
       setSession(session);
-      addRecentSource({
+      const descriptor = {
         id: archive.id,
         type: SourceType.ARCHIVE,
         path: archive.filePath,
         label: archive.fileName,
+      } as const;
+      addRecentSource(descriptor);
+      ipcClient.invoke(channels.RECENT_SOURCES_ADD, descriptor).catch((error) => {
+        console.error('Failed to persist recent source', error);
       });
 
       // Navigate to last viewed page (auto-resume)
@@ -83,6 +87,9 @@ export function useArchive() {
       setImages(images);
       setSession(session);
       addRecentSource(source);
+      ipcClient.invoke(channels.RECENT_SOURCES_ADD, source).catch((error) => {
+        console.error('Failed to persist recent source', error);
+      });
 
       if (session && session.currentPageIndex !== undefined) {
         navigateToPage(session.currentPageIndex);
