@@ -6,7 +6,6 @@ import FolderSidebar from './components/viewer/FolderSidebar';
 import LoadingIndicator from './components/shared/LoadingIndicator';
 import { useViewerStore } from './store/viewerStore';
 import { useArchive } from './hooks/useArchive';
-import RecentSources from './components/home/RecentSources';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { SourceDescriptor, SourceType } from '@shared/types/Source';
 import * as channels from '@shared/constants/ipc-channels';
@@ -152,8 +151,35 @@ function App() {
     <ErrorBoundary>
       <div className={`app ${isFullscreen ? 'fullscreen' : ''}`}>
         <header className={`app-header ${isFullscreen ? 'hidden' : ''}`}>
-          <h1>MyViewer</h1>
-          <p className="subtitle">Archive Image Viewer</p>
+          <div className="header-title">
+            <div>
+              <h1>MyViewer</h1>
+              <p className="subtitle">Archive Image Viewer</p>
+            </div>
+            {recentSources.length > 0 && (
+              <div className="recent-links">
+                <span className="recent-label">Recent:</span>
+                <div className="recent-link-list">
+                  {recentSources.slice(0, 5).map((source) => (
+                    <button
+                      key={`${source.type}-${source.path}`}
+                      className="recent-chip"
+                      onClick={async () => {
+                        if (source.type === SourceType.FOLDER) {
+                          await openFolder(source.path);
+                        } else {
+                          await openArchive(source.path);
+                        }
+                      }}
+                      title={source.path}
+                    >
+                      {source.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </header>
 
         {currentSource && <NavigationBar className={isFullscreen ? 'floating' : ''} />}
@@ -188,16 +214,6 @@ function App() {
                   Use File → Open Archive (Cmd+O), File → Open Folder (Cmd+Shift+O), or drag & drop
                 </p>
               </div>
-              <RecentSources
-                sources={recentSources}
-                onOpen={async (source) => {
-                  if (source.type === SourceType.FOLDER) {
-                    await openFolder(source.path);
-                  } else {
-                    await openArchive(source.path);
-                  }
-                }}
-              />
             </div>
           )}
             </div>
