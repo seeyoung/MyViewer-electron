@@ -1,6 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useViewerStore } from '../../store/viewerStore';
 import { useImageNavigation } from '../../hooks/useImageNavigation';
+import { Image as ViewerImage } from '@shared/types/Image';
+import { SourceDescriptor, SourceType } from '@shared/types/Source';
 
 interface FolderNodeView {
   path: string;
@@ -9,6 +11,8 @@ interface FolderNodeView {
   imageCount: number;
   tooltip: string;
 }
+
+const MAX_THUMBNAILS = 200;
 
 function buildFolderList(images: { folderPath: string }[], sourcePath: string): FolderNodeView[] {
   const counts = new Map<string, number>();
@@ -50,9 +54,15 @@ const FolderSidebar: React.FC = () => {
   const activeFolderId = useViewerStore((state) => state.activeFolderId);
   const setActiveFolderId = useViewerStore((state) => state.setActiveFolderId);
   const navigateToPage = useViewerStore((state) => state.navigateToPage);
+  const sidebarTab = useViewerStore((state) => state.sidebarTab);
+  const setSidebarTab = useViewerStore((state) => state.setSidebarTab);
   const { currentPageIndex } = useImageNavigation();
 
   const folders = useMemo(() => buildFolderList(images, currentSource?.path || ''), [images, currentSource]);
+  const thumbnailImages = useMemo(
+    () => images.map((img, index) => ({ img, index })).slice(0, MAX_THUMBNAILS),
+    [images]
+  );
 
   const handleSelect = (folderPath: string) => {
     const normalized = folderPath === '/' ? '/' : folderPath;
@@ -70,40 +80,67 @@ const FolderSidebar: React.FC = () => {
 
   return (
     <aside className="folder-sidebar">
-      <div className="sidebar-header">
-        {folders.length > 1 && (
-          <span>{folders.length} subfolders</span>
-        )}
+      <div className="sidebar-tabs">
+        <button
+          className={`sidebar-tab ${sidebarTab === 'folders' ? 'active' : ''}`}
+          onClick={() => setSidebarTab('folders')}
+        >
+          Folders {folders.length > 1 ? `(${folders.length})` : ''}
+        </button>
+        <button
+          className={`sidebar-tab ${sidebarTab === 'thumbnails' ? 'active' : ''}`}
+          onClick={() => setSidebarTab('thumbnails')}
+        >
+          Thumbnails
+        </button>
       </div>
-      <div className="folder-list">
-        {folders.map((folder) => (
-          <button
-            key={folder.path}
-            className={`folder-item ${activeFolderId === folder.path ? 'active' : ''}`}
-            style={{ paddingLeft: `${folder.depth * 12 + 8}px` }}
-            onClick={() => handleSelect(folder.path)}
-            title={folder.tooltip}
-          >
-            <span className="name">{folder.name}</span>
-            <span className="count">{folder.imageCount}</span>
-          </button>
-        ))}
-      </div>
+      {sidebarTab === 'folders' ? (
+        <div className="folder-list">
+          {folders.map((folder) => (
+            <button
+              key={folder.path}
+              className={`folder-item ${activeFolderId === folder.path ? 'active' : ''}`}
+              style={{ paddingLeft: `${folder.depth * 12 + 8}px` }}
+              onClick={() => handleSelect(folder.path)}
+              title={folder.tooltip}
+            >
+              <span className="name">{folder.name}</span>
+              <span className="count">{folder.imageCount}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <ThumbnailGrid
+          images={thumbnailImages}
+          source={currentSource}
+          onSelect={(index) => navigateToPage(index)}
+        />
+      )}
       <style>{`
         .folder-sidebar {
-          width: 220px;
-          background: rgba(45, 45, 45, 0.9);
+          width: 240px;
+          background: rgba(45, 45, 45, 0.95);
           border-right: 1px solid #333;
           display: flex;
           flex-direction: column;
           color: #ddd;
         }
-        .sidebar-header {
-          padding: 0.75rem;
+        .sidebar-tabs {
           display: flex;
-          justify-content: space-between;
-          font-size: 1.275rem;
           border-bottom: 1px solid #333;
+        }
+        .sidebar-tab {
+          flex: 1;
+          padding: 0.5rem;
+          background: none;
+          border: none;
+          color: #ccc;
+          cursor: pointer;
+          font-weight: 600;
+        }
+        .sidebar-tab.active {
+          background: rgba(255, 255, 255, 0.08);
+          color: #fff;
         }
         .folder-list {
           flex: 1;
@@ -132,8 +169,112 @@ const FolderSidebar: React.FC = () => {
           font-size: 1.125rem;
           color: #999;
         }
+        .thumbnail-grid {
+          flex: 1;
+          overflow-y: auto;
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+          gap: 0.5rem;
+          padding: 0.5rem;
+        }
+        .thumbnail-item {
+          border: none;
+          background: #2c2c2c;
+          border-radius: 6px;
+          overflow: hidden;
+          position: relative;
+          padding: 0;
+          cursor: pointer;
+          height: 80px;
+        }
+        .thumbnail-item img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+        .thumbnail-item span {
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          font-size: 0.65rem;
+          background: rgba(0, 0, 0, 0.5);
+          padding: 0.1rem 0.2rem;
+        }
       `}</style>
     </aside>
+  );
+};
+
+interface ThumbnailGridProps {
+  images: { img: ViewerImage; index: number }[];
+  source: SourceDescriptor | null;
+  onSelect: (index: number) => void;
+}
+
+const ThumbnailGrid: React.FC<ThumbnailGridProps> = ({ images, source, onSelect }) => {
+  return (
+    <div className="thumbnail-grid">
+      {images.map(({ img, index }) => (
+        <ThumbnailItem
+          key={img.id}
+          image={img}
+          source={source}
+          onSelect={() => onSelect(index)}
+        />
+      ))}
+    </div>
+  );
+};
+
+interface ThumbnailItemProps {
+  image: ViewerImage;
+  source: SourceDescriptor | null;
+  onSelect: () => void;
+}
+
+const ThumbnailItem: React.FC<ThumbnailItemProps> = ({ image, source, onSelect }) => {
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const result: any = await window.electronAPI.invoke('image:load', {
+          archiveId: image.archiveId,
+          imagePath: image.pathInArchive,
+          encoding: 'base64',
+          sourceType: source?.type ?? SourceType.ARCHIVE,
+        });
+        if (!cancelled && result?.data && result?.format) {
+          setDataUrl(`data:image/${result.format};base64,${result.data}`);
+        }
+      } catch (error) {
+        console.error('Failed to load thumbnail', error);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [image.id, image.pathInArchive, source?.id, source?.type]);
+
+  return (
+    <button className="thumbnail-item" onClick={onSelect} title={image.pathInArchive}>
+      {dataUrl ? (
+        <img src={dataUrl} alt={image.fileName} loading="lazy" />
+      ) : (
+        <span>{loading ? 'Loading…' : 'No preview'}</span>
+      )}
+    </button>
   );
 };
 
