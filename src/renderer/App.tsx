@@ -172,6 +172,11 @@ function App() {
                         }
                       }}
                       title={source.path}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        window.electronAPI.invoke(channels.RECENT_SOURCES_REMOVE, source);
+                        setRecentSources(recentSources.filter((item) => !(item.path === source.path && item.type === source.type)));
+                      }}
                     >
                       {source.label}
                     </button>

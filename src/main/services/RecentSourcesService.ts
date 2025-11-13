@@ -50,4 +50,9 @@ export class RecentSourcesService {
     this.cache = [];
     this.save();
   }
+
+  public remove(source: SourceDescriptor) {
+    this.cache = this.cache.filter((item) => !(item.path === source.path && item.type === source.type));
+    this.save();
+  }
 }

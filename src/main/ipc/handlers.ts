@@ -284,6 +284,14 @@ export function initializeIpcHandlers(): void {
     })
   );
 
+  registry.register(
+    channels.RECENT_SOURCES_REMOVE,
+    withErrorHandling(async (event, data: any) => {
+      recentSourcesService.remove(data as SourceDescriptor);
+      return { success: true };
+    })
+  );
+
   console.log('IPC handlers initialized');
 }
 

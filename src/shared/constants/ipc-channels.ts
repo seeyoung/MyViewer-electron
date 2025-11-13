@@ -26,6 +26,7 @@ export const FS_STAT = 'fs:stat';
 export const RECENT_SOURCES_GET = 'recentSources:get';
 export const RECENT_SOURCES_ADD = 'recentSources:add';
 export const RECENT_SOURCES_CLEAR = 'recentSources:clear';
+export const RECENT_SOURCES_REMOVE = 'recentSources:remove';
 
 // Bookmark operations
 export const BOOKMARKS_LIST = 'bookmarks:list';
