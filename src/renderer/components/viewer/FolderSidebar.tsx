@@ -122,6 +122,7 @@ const FolderSidebar: React.FC = () => {
           images={thumbnailImages}
           source={currentSource}
           onSelect={(index) => navigateToPage(index)}
+          width={sidebarWidth}
         />
       )}
       <style>{`
@@ -219,11 +220,17 @@ interface ThumbnailGridProps {
   images: { img: ViewerImage; index: number }[];
   source: SourceDescriptor | null;
   onSelect: (index: number) => void;
+  width: number;
 }
 
-const ThumbnailGrid: React.FC<ThumbnailGridProps> = ({ images, source, onSelect }) => {
+const ThumbnailGrid: React.FC<ThumbnailGridProps> = ({ images, source, onSelect, width }) => {
   return (
-    <div className="thumbnail-grid">
+    <div
+      className="thumbnail-grid"
+      style={{
+        gridTemplateColumns: `repeat(auto-fill, minmax(${Math.max(80, Math.min(160, width / 3))}px, 1fr))`,
+      }}
+    >
       {images.map(({ img, index }) => (
         <ThumbnailItem
           key={img.id}
