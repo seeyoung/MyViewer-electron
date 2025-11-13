@@ -224,11 +224,13 @@ interface ThumbnailGridProps {
 }
 
 const ThumbnailGrid: React.FC<ThumbnailGridProps> = ({ images, source, onSelect, width }) => {
+  const targetWidth = Math.max(80, width - 60);
+  const columnWidth = Math.min(260, Math.max(120, targetWidth / 1.2));
   return (
     <div
       className="thumbnail-grid"
       style={{
-        gridTemplateColumns: `repeat(auto-fill, minmax(${Math.max(80, Math.min(160, width / 3))}px, 1fr))`,
+        gridTemplateColumns: `repeat(auto-fit, minmax(${Math.round(columnWidth)}px, 1fr))`,
       }}
     >
       {images.map(({ img, index }) => (
