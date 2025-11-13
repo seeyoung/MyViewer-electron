@@ -59,10 +59,17 @@ const FolderSidebar: React.FC = () => {
   const { currentPageIndex } = useImageNavigation();
 
   const folders = useMemo(() => buildFolderList(images, currentSource?.path || ''), [images, currentSource]);
-  const thumbnailImages = useMemo(
-    () => images.map((img, index) => ({ img, index })).slice(0, MAX_THUMBNAILS),
-    [images]
-  );
+  const thumbnailImages = useMemo(() => {
+    const currentFolder = activeFolderId || '/';
+    return images
+      .map((img, index) => ({ img, index }))
+      .filter(({ img }) => {
+        const folder = img.folderPath || '/';
+        const normalized = folder.startsWith('/') ? folder : `/${folder}`;
+        return normalized === currentFolder;
+      })
+      .slice(0, MAX_THUMBNAILS);
+  }, [images, activeFolderId]);
 
   const handleSelect = (folderPath: string) => {
     const normalized = folderPath === '/' ? '/' : folderPath;
