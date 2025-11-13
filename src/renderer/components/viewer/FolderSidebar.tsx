@@ -7,9 +7,10 @@ interface FolderNodeView {
   name: string;
   depth: number;
   imageCount: number;
+  tooltip: string;
 }
 
-function buildFolderList(images: { folderPath: string }[]): FolderNodeView[] {
+function buildFolderList(images: { folderPath: string }[], sourcePath: string): FolderNodeView[] {
   const counts = new Map<string, number>();
   images.forEach((img) => {
     const folder = img.folderPath || '/';
@@ -25,14 +26,18 @@ function buildFolderList(images: { folderPath: string }[]): FolderNodeView[] {
     });
   });
 
+  const segmentsFromRoot = sourcePath ? sourcePath.replace(/\\/g, '/').split('/').filter(Boolean) : [];
+  const sourceName = segmentsFromRoot.length ? segmentsFromRoot[segmentsFromRoot.length - 1] : 'Root';
+
   const entries: FolderNodeView[] = Array.from(counts.entries()).map(([path, count]) => {
     const segments = path.split('/').filter(Boolean);
-    const name = segments.length === 0 ? 'Root' : segments[segments.length - 1];
+    const name = segments.length === 0 ? sourceName : segments[segments.length - 1];
     return {
       path: path === '' ? '/' : path,
       name,
       depth: segments.length,
       imageCount: count,
+      tooltip: path === '/' ? sourcePath || '/' : path,
     };
   });
 
@@ -41,12 +46,13 @@ function buildFolderList(images: { folderPath: string }[]): FolderNodeView[] {
 
 const FolderSidebar: React.FC = () => {
   const images = useViewerStore((state) => state.images);
+  const currentSource = useViewerStore((state) => state.currentSource);
   const activeFolderId = useViewerStore((state) => state.activeFolderId);
   const setActiveFolderId = useViewerStore((state) => state.setActiveFolderId);
   const navigateToPage = useViewerStore((state) => state.navigateToPage);
   const { currentPageIndex } = useImageNavigation();
 
-  const folders = useMemo(() => buildFolderList(images), [images]);
+  const folders = useMemo(() => buildFolderList(images, currentSource?.path || ''), [images, currentSource]);
 
   const handleSelect = (folderPath: string) => {
     const normalized = folderPath === '/' ? '/' : folderPath;
@@ -75,6 +81,7 @@ const FolderSidebar: React.FC = () => {
             className={`folder-item ${activeFolderId === folder.path ? 'active' : ''}`}
             style={{ paddingLeft: `${folder.depth * 12 + 8}px` }}
             onClick={() => handleSelect(folder.path)}
+            title={folder.tooltip}
           >
             <span className="name">{folder.name}</span>
             <span className="count">{folder.imageCount}</span>
