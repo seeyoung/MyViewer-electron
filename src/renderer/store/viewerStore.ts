@@ -35,6 +35,7 @@ interface ViewerState {
   showFolderTree: boolean;
   sidebarTab: 'folders' | 'thumbnails';
   sidebarWidth: number;
+  thumbnailPosition: 'sidebar' | 'bottom';
   showBookmarks: boolean;
 
   // Filter/search
@@ -66,6 +67,7 @@ interface ViewerState {
   addRecentSource: (source: SourceDescriptor) => void;
   setSidebarTab: (tab: 'folders' | 'thumbnails') => void;
   setSidebarWidth: (width: number) => void;
+  setThumbnailPosition: (position: 'sidebar' | 'bottom') => void;
   reset: () => void;
 }
 
@@ -95,6 +97,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   showFolderTree: false,
   sidebarTab: 'folders',
   sidebarWidth: 240,
+  thumbnailPosition: 'sidebar',
   showBookmarks: false,
 
   activeFolderId: null,
@@ -156,6 +159,8 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
 
   setSidebarWidth: (width) => set({ sidebarWidth: Math.min(500, Math.max(180, width)) }),
 
+  setThumbnailPosition: (position) => set({ thumbnailPosition: position }),
+
   reset: () =>
     set({
       currentSource: null,
@@ -172,6 +177,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       showFolderTree: false,
       sidebarTab: 'folders',
       showBookmarks: false,
+      thumbnailPosition: 'sidebar',
       activeFolderId: null,
       searchQuery: '',
       bookmarks: [],

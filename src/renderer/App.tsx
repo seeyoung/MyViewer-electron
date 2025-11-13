@@ -3,6 +3,7 @@ import ErrorBoundary from './components/shared/ErrorBoundary';
 import NavigationBar from './components/viewer/NavigationBar';
 import ImageViewer from './components/viewer/ImageViewer';
 import FolderSidebar from './components/viewer/FolderSidebar';
+import BottomThumbnails from './components/viewer/BottomThumbnails';
 import LoadingIndicator from './components/shared/LoadingIndicator';
 import { useViewerStore } from './store/viewerStore';
 import { useArchive } from './hooks/useArchive';
@@ -24,6 +25,10 @@ function App() {
   const { openArchive, openFolder, isOpening } = useArchive();
   const sidebarWidth = useViewerStore(state => state.sidebarWidth);
   const setSidebarWidth = useViewerStore(state => state.setSidebarWidth);
+  const thumbnailPosition = useViewerStore(state => state.thumbnailPosition);
+  const setThumbnailPosition = useViewerStore(state => state.setThumbnailPosition);
+  const sidebarTab = useViewerStore(state => state.sidebarTab);
+  const setSidebarTab = useViewerStore(state => state.setSidebarTab);
   const [viewerSize, setViewerSize] = useState({ width: 800, height: 600 });
 
   // Enable keyboard shortcuts
@@ -78,6 +83,12 @@ function App() {
 
     loadRecent();
   }, [setRecentSources]);
+
+  useEffect(() => {
+    if (thumbnailPosition === 'bottom' && sidebarTab !== 'folders') {
+      setSidebarTab('folders');
+    }
+  }, [thumbnailPosition, sidebarTab, setSidebarTab]);
 
   useEffect(() => {
     const removeListener = window.electronAPI.on('window-fullscreen-changed', (fullscreenState: unknown) => {
@@ -158,34 +169,60 @@ function App() {
               <h1>MyViewer</h1>
               <p className="subtitle">Archive Image Viewer</p>
             </div>
-            {recentSources.length > 0 && (
-              <div className="recent-links">
-                <span className="recent-label">Recent:</span>
-                <div className="recent-link-list">
-                  {recentSources.slice(0, 5).map((source) => (
-                    <button
-                      key={`${source.type}-${source.path}`}
-                      className="recent-chip"
-                      onClick={async () => {
-                        if (source.type === SourceType.FOLDER) {
-                          await openFolder(source.path);
-                        } else {
-                          await openArchive(source.path);
-                        }
-                      }}
-                      title={source.path}
-                      onContextMenu={(event) => {
-                        event.preventDefault();
-                        window.electronAPI.invoke(channels.RECENT_SOURCES_REMOVE, source);
-                        setRecentSources(recentSources.filter((item) => !(item.path === source.path && item.type === source.type)));
-                      }}
-                    >
-                      {source.label}
-                    </button>
-                  ))}
-                </div>
+            <div className="recent-links">
+              {recentSources.length > 0 && (
+                <>
+                  <span className="recent-label">Recent:</span>
+                  <div className="recent-link-list">
+                    {recentSources.slice(0, 5).map((source) => (
+                      <button
+                        key={`${source.type}-${source.path}`}
+                        className="recent-chip"
+                        onClick={async () => {
+                          if (source.type === SourceType.FOLDER) {
+                            await openFolder(source.path);
+                          } else {
+                            await openArchive(source.path);
+                          }
+                        }}
+                        title={source.path}
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          window.electronAPI.invoke(channels.RECENT_SOURCES_REMOVE, source);
+                          setRecentSources(
+                            recentSources.filter((item) => !(item.path === source.path && item.type === source.type))
+                          );
+                        }}
+                      >
+                        {source.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              <div className="thumbnail-position">
+                <label>
+                  <input
+                    type="radio"
+                    name="thumbnail-position"
+                    value="sidebar"
+                    checked={thumbnailPosition === 'sidebar'}
+                    onChange={() => setThumbnailPosition('sidebar')}
+                  />
+                  Sidebar
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="thumbnail-position"
+                    value="bottom"
+                    checked={thumbnailPosition === 'bottom'}
+                    onChange={() => setThumbnailPosition('bottom')}
+                  />
+                  Bottom
+                </label>
               </div>
-            )}
+            </div>
           </div>
         </header>
 
@@ -250,6 +287,9 @@ function App() {
           )}
             </div>
           </div>
+          {thumbnailPosition === 'bottom' && currentSource && (
+            <BottomThumbnails />
+          )}
         </main>
       </div>
     </ErrorBoundary>
