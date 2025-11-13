@@ -67,7 +67,12 @@ interface ViewerState {
   reset: () => void;
 }
 
-export const useViewerStore = create<ViewerState>((set) => ({
+const normalizeFolder = (folderPath?: string | null) => {
+  if (!folderPath) return '/';
+  return folderPath.startsWith('/') ? folderPath : `/${folderPath}`;
+};
+
+export const useViewerStore = create<ViewerState>((set, get) => ({
   // Initial state
   currentSource: null,
   currentSession: null,
@@ -102,12 +107,17 @@ export const useViewerStore = create<ViewerState>((set) => ({
 
   setSession: (session) => set({ currentSession: session || null }),
 
-  setImages: (images) => set({ images }),
+  setImages: (images) => set({ images, activeFolderId: images.length ? normalizeFolder(images[0].folderPath) : null }),
 
   navigateToPage: (index) =>
-    set((state) => ({
-      currentPageIndex: Math.max(0, Math.min(index, state.images.length - 1)),
-    })),
+    set((state) => {
+      const nextIndex = Math.max(0, Math.min(index, state.images.length - 1));
+      const nextImage = state.images[nextIndex];
+      return {
+        currentPageIndex: nextIndex,
+        activeFolderId: nextImage ? normalizeFolder(nextImage.folderPath) : state.activeFolderId,
+      };
+    }),
 
   setViewMode: (mode) => set({ viewMode: mode }),
 
