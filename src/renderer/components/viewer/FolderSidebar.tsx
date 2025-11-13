@@ -71,7 +71,6 @@ const FolderSidebar: React.FC = () => {
   return (
     <aside className="folder-sidebar">
       <div className="sidebar-header">
-        <h4>Folders</h4>
         {folders.length > 1 && (
           <span>{folders.length} subfolders</span>
         )}
