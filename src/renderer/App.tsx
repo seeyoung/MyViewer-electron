@@ -22,6 +22,8 @@ function App() {
   const recentSources = useViewerStore(state => state.recentSources);
   const setRecentSources = useViewerStore(state => state.setRecentSources);
   const { openArchive, openFolder, isOpening } = useArchive();
+  const sidebarWidth = useViewerStore(state => state.sidebarWidth);
+  const setSidebarWidth = useViewerStore(state => state.setSidebarWidth);
   const [viewerSize, setViewerSize] = useState({ width: 800, height: 600 });
 
   // Enable keyboard shortcuts
@@ -192,7 +194,29 @@ function App() {
         <main className={`app-main ${isFullscreen ? 'fullscreen' : ''}`}>
           <div className="viewer-layout">
             {showFolderTree && currentSource && (
-              <FolderSidebar />
+              <>
+                <FolderSidebar />
+                <div
+                  className="sidebar-resizer"
+                  onMouseDown={(event) => {
+                    const startX = event.clientX;
+                    const startWidth = sidebarWidth;
+
+                    const handleMouseMove = (moveEvent: MouseEvent) => {
+                      const delta = moveEvent.clientX - startX;
+                      setSidebarWidth(startWidth + delta);
+                    };
+
+                    const handleMouseUp = () => {
+                      window.removeEventListener('mousemove', handleMouseMove);
+                      window.removeEventListener('mouseup', handleMouseUp);
+                    };
+
+                    window.addEventListener('mousemove', handleMouseMove);
+                    window.addEventListener('mouseup', handleMouseUp);
+                  }}
+                />
+              </>
             )}
             <div className="viewer-content">
           {isOpening || isLoading ? (

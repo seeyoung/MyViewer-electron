@@ -56,6 +56,7 @@ const FolderSidebar: React.FC = () => {
   const navigateToPage = useViewerStore((state) => state.navigateToPage);
   const sidebarTab = useViewerStore((state) => state.sidebarTab);
   const setSidebarTab = useViewerStore((state) => state.setSidebarTab);
+  const sidebarWidth = useViewerStore((state) => state.sidebarWidth);
   const { currentPageIndex } = useImageNavigation();
 
   const folders = useMemo(() => buildFolderList(images, currentSource?.path || ''), [images, currentSource]);
@@ -86,7 +87,7 @@ const FolderSidebar: React.FC = () => {
   };
 
   return (
-    <aside className="folder-sidebar">
+    <aside className="folder-sidebar" style={{ width: sidebarWidth }}>
       <div className="sidebar-tabs">
         <button
           className={`sidebar-tab ${sidebarTab === 'folders' ? 'active' : ''}`}
