@@ -72,7 +72,7 @@ const FolderSidebar: React.FC = () => {
     <aside className="folder-sidebar">
       <div className="sidebar-header">
         <h4>Folders</h4>
-        <span>{folders.length} paths</span>
+        <span>{folders.length} subfolders</span>
       </div>
       <div className="folder-list">
         {folders.map((folder) => (
