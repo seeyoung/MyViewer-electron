@@ -144,7 +144,10 @@ function App() {
       const nav = document.querySelector('.navigation-bar');
       const headerHeight = isFullscreen ? 0 : (header?.clientHeight || 0);
       const navHeight = isFullscreen ? 0 : (nav?.clientHeight || 0);
-      const availableHeight = isFullscreen ? window.innerHeight : (window.innerHeight - headerHeight - navHeight);
+      const bottomPanelHeight = (!isFullscreen && thumbnailPosition === 'bottom') ? 170 : 0;
+      const availableHeight = isFullscreen
+        ? window.innerHeight
+        : (window.innerHeight - headerHeight - navHeight - bottomPanelHeight);
 
       setViewerSize({
         width: window.innerWidth,
@@ -158,7 +161,7 @@ function App() {
     return () => {
       window.removeEventListener('resize', updateSize);
     };
-  }, [currentSource, isFullscreen]);
+  }, [currentSource, isFullscreen, thumbnailPosition]);
 
   return (
     <ErrorBoundary>
