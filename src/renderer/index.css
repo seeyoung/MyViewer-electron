@@ -101,11 +101,18 @@ body {
   position: relative;
 }
 
-.folder-sidebar + .sidebar-resizer {
+.sidebar-wrapper {
+  display: flex;
+  flex-direction: row;
+  flex-shrink: 0;
+  height: 100%;
+}
+
+.sidebar-resizer {
   width: 6px;
   cursor: col-resize;
   background: rgba(255, 255, 255, 0.05);
-  height: 100%;
+  flex-shrink: 0;
 }
 .sidebar-resizer:hover {
   background: rgba(255, 255, 255, 0.1);

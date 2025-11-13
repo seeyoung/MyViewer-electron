@@ -194,7 +194,7 @@ function App() {
         <main className={`app-main ${isFullscreen ? 'fullscreen' : ''}`}>
           <div className="viewer-layout">
             {showFolderTree && currentSource && (
-              <>
+              <div className="sidebar-wrapper">
                 <FolderSidebar />
                 <div
                   className="sidebar-resizer"
@@ -219,7 +219,7 @@ function App() {
                     window.addEventListener('mouseup', handleMouseUp);
                   }}
                 />
-              </>
+              </div>
             )}
             <div className="viewer-content">
           {isOpening || isLoading ? (
