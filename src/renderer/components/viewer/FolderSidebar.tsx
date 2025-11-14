@@ -3,8 +3,9 @@ import { useViewerStore } from '../../store/viewerStore';
 import { useImageNavigation } from '../../hooks/useImageNavigation';
 import { Image as ViewerImage } from '@shared/types/Image';
 import { SourceDescriptor, SourceType } from '@shared/types/Source';
-import { useInViewport } from '../../hooks/useInViewport';
-import { runThumbnailTask } from '../../utils/thumbnailRequestQueue';
+import { useInViewportShared } from '../../hooks/useInViewport';
+import { runThumbnailTask, Priority } from '../../utils/thumbnailRequestQueue';
+import { PLACEHOLDER_LOADING, PLACEHOLDER_ERROR } from '../../constants/placeholders';
 
 interface FolderNodeView {
   path: string;
@@ -197,6 +198,14 @@ const FolderSidebar: React.FC = () => {
           padding: 0;
           cursor: pointer;
           height: 80px;
+          transition: transform 0.2s ease;
+        }
+        .thumbnail-item:hover {
+          transform: scale(1.05);
+        }
+        .thumbnail-item.error {
+          background: #2a1a1a;
+          border: 1px solid #ff4444;
         }
         .thumbnail-item img {
           width: 100%;
@@ -204,14 +213,30 @@ const FolderSidebar: React.FC = () => {
           object-fit: cover;
           display: block;
         }
-        .thumbnail-item span {
+        .thumbnail-item img.loading {
+          opacity: 0.5;
+          animation: pulse 1.5s ease-in-out infinite;
+        }
+        .thumbnail-item img.error {
+          opacity: 0.3;
+          filter: grayscale(100%);
+        }
+        .error-badge {
           position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          font-size: 0.65rem;
-          background: rgba(0, 0, 0, 0.5);
-          padding: 0.1rem 0.2rem;
+          top: 4px;
+          right: 4px;
+          background: rgba(255, 68, 68, 0.9);
+          border-radius: 50%;
+          width: 16px;
+          height: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 10px;
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 0.5; }
+          50% { opacity: 0.8; }
         }
       `}</style>
     </aside>
@@ -256,58 +281,98 @@ interface ThumbnailItemProps {
   height: number;
 }
 
-interface ThumbnailPayload {
+interface ThumbnailState {
   dataUrl: string;
+  status: 'loading' | 'success' | 'error';
 }
 
 const ThumbnailItem: React.FC<ThumbnailItemProps> = ({ image, source, onSelect, height }) => {
-  const [thumbnail, setThumbnail] = useState<ThumbnailPayload | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [thumbnail, setThumbnail] = useState<ThumbnailState>({
+    dataUrl: PLACEHOLDER_LOADING,
+    status: 'loading',
+  });
   const itemRef = useRef<HTMLButtonElement | null>(null);
-  const isVisible = useInViewport(itemRef, { rootMargin: '64px 0px', threshold: 0, freezeOnceVisible: true });
+  const isVisible = useInViewportShared(itemRef, { rootMargin: '64px 0px', threshold: 0, freezeOnceVisible: true });
+  const retryCountRef = useRef(0);
+  const maxRetries = 2;
 
   useEffect(() => {
     let cancelled = false;
     if (!isVisible) {
-      return () => {
-        cancelled = true;
-      };
+      return undefined;
     }
 
     const load = async () => {
-      setLoading(true);
+      setThumbnail({ dataUrl: PLACEHOLDER_LOADING, status: 'loading' });
+
       try {
-        const response: any = await runThumbnailTask(() =>
-          window.electronAPI.invoke('image:get-thumbnail', {
-            archiveId: image.archiveId,
-            image,
-            sourceType: source?.type ?? SourceType.ARCHIVE,
-          }) as Promise<any>
+        const response: any = await runThumbnailTask(
+          () =>
+            window.electronAPI.invoke('image:get-thumbnail', {
+              archiveId: image.archiveId,
+              image,
+              sourceType: source?.type ?? SourceType.ARCHIVE,
+            }) as Promise<any>,
+          Priority.PREFETCH_NEAR // Sidebar thumbnails get near priority
         );
+
         if (!cancelled && response?.dataUrl) {
-          setThumbnail({ dataUrl: response.dataUrl as string });
+          setThumbnail({
+            dataUrl: response.dataUrl as string,
+            status: 'success',
+          });
+          retryCountRef.current = 0;
+          return;
         }
       } catch (error) {
-        console.error('Failed to load thumbnail', error);
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
+        console.error('Failed to load thumbnail:', error);
+
+        // Retry logic with exponential backoff
+        if (retryCountRef.current < maxRetries) {
+          retryCountRef.current++;
+          console.log(`Retrying thumbnail load (${retryCountRef.current}/${maxRetries})...`);
+
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCountRef.current));
+
+          if (!cancelled) {
+            load();
+          }
+          return;
         }
+      }
+
+      // Final failure - show error placeholder
+      if (!cancelled) {
+        setThumbnail({
+          dataUrl: PLACEHOLDER_ERROR,
+          status: 'error',
+        });
       }
     };
 
     load();
+
     return () => {
       cancelled = true;
     };
   }, [image.archiveId, image, isVisible, source?.type]);
 
   return (
-    <button className="thumbnail-item" onClick={onSelect} title={image.pathInArchive} style={{ height }} ref={itemRef}>
-      {thumbnail ? (
-        <img src={thumbnail.dataUrl} alt={image.fileName} loading="lazy" />
-      ) : (
-        <span>{loading ? 'Loading…' : 'No preview'}</span>
+    <button
+      className={`thumbnail-item ${thumbnail.status}`}
+      onClick={onSelect}
+      title={thumbnail.status === 'error' ? `Failed to load: ${image.pathInArchive}` : image.pathInArchive}
+      style={{ height }}
+      ref={itemRef}
+    >
+      <img
+        src={thumbnail.dataUrl}
+        alt={image.fileName}
+        loading="lazy"
+        className={thumbnail.status}
+      />
+      {thumbnail.status === 'error' && (
+        <span className="error-badge" title="Failed to load thumbnail">⚠️</span>
       )}
     </button>
   );
