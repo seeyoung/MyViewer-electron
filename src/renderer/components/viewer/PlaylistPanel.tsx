@@ -351,27 +351,50 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
     if (paths.length === 0) return;
 
     try {
+      // First try without allowing duplicates
       const result = await window.electronAPI.invoke(channels.PLAYLIST_ADD_ENTRIES_BATCH, {
         playlistId: activePlaylist.id,
         sourcePaths: paths,
+        allowDuplicates: false,
       });
 
       await loadPlaylistEntries(activePlaylist.id);
 
       // Show summary if any paths were skipped
       const { skipped } = result;
+
+      // If there are duplicates, ask user if they want to add anyway
+      if (skipped.duplicate.length > 0) {
+        const duplicateCount = skipped.duplicate.length;
+        const confirmed = confirm(
+          `${duplicateCount} ${duplicateCount === 1 ? 'path already exists' : 'paths already exist'} in this playlist.\n\nAdd ${duplicateCount === 1 ? 'it' : 'them'} anyway?`
+        );
+
+        if (confirmed) {
+          // Retry with allowDuplicates=true for only the duplicate paths
+          const retryResult = await window.electronAPI.invoke(channels.PLAYLIST_ADD_ENTRIES_BATCH, {
+            playlistId: activePlaylist.id,
+            sourcePaths: skipped.duplicate,
+            allowDuplicates: true,
+          });
+          await loadPlaylistEntries(activePlaylist.id);
+          alert(`Added ${retryResult.entries.length} duplicate ${retryResult.entries.length === 1 ? 'entry' : 'entries'}.`);
+        }
+      }
+
+      // Show summary for initially added and invalid
       const messages: string[] = [];
 
-      if (skipped.duplicate.length > 0) {
-        messages.push(`${skipped.duplicate.length} duplicate ${skipped.duplicate.length === 1 ? 'path' : 'paths'} skipped`);
+      if (result.entries.length > 0) {
+        messages.push(`Added ${result.entries.length} ${result.entries.length === 1 ? 'entry' : 'entries'}`);
       }
 
       if (skipped.invalid.length > 0) {
-        messages.push(`${skipped.invalid.length} invalid ${skipped.invalid.length === 1 ? 'path' : 'paths'} skipped`);
+        messages.push(`${skipped.invalid.length} invalid ${skipped.invalid.length === 1 ? 'path was' : 'paths were'} skipped`);
       }
 
-      if (messages.length > 0) {
-        alert(`Added ${result.entries.length} ${result.entries.length === 1 ? 'entry' : 'entries'}.\n${messages.join('\n')}`);
+      if (messages.length > 0 && result.entries.length > 0) {
+        alert(messages.join('.\n'));
       }
     } catch (error) {
       console.error('Failed to add entries:', error);

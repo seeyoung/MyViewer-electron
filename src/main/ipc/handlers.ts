@@ -462,11 +462,12 @@ function getAllImagesFromFolder(folder: any): any[] {
   registry.register(
     channels.PLAYLIST_ADD_ENTRIES_BATCH,
     withErrorHandling(async (event, data: any) => {
-      const { playlistId, sourcePaths, insertPosition } = data;
+      const { playlistId, sourcePaths, insertPosition, allowDuplicates } = data;
       const entries = await playlistService.addMultipleSources(
         playlistId,
         sourcePaths,
-        insertPosition
+        insertPosition,
+        allowDuplicates
       );
       return entries;
     })

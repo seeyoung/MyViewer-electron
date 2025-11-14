@@ -121,13 +121,14 @@ export class PlaylistService {
 
   /**
    * Add multiple sources to playlist in batch
-   * Skips invalid paths and duplicates, continues with valid ones
+   * @param allowDuplicates - If true, allows duplicate paths to be added
    * @returns Object with added entries and skip information
    */
   async addMultipleSources(
     playlistId: string,
     sourcePaths: string[],
-    insertPosition?: number
+    insertPosition?: number,
+    allowDuplicates = false
   ): Promise<{
     entries: PlaylistEntry[];
     skipped: { invalid: string[]; duplicate: string[] };
@@ -146,7 +147,7 @@ export class PlaylistService {
         const sanitizedPath = await this.validateAndSanitizePath(sourcePath);
 
         // Check for duplicates
-        if (existingPaths.has(sanitizedPath)) {
+        if (existingPaths.has(sanitizedPath) && !allowDuplicates) {
           skippedDuplicate.push(sourcePath);
           continue;
         }
@@ -163,7 +164,9 @@ export class PlaylistService {
         });
 
         // Add to existing paths to catch duplicates within this batch
-        existingPaths.add(sanitizedPath);
+        if (!allowDuplicates) {
+          existingPaths.add(sanitizedPath);
+        }
       } catch (error) {
         // Skip invalid paths, continue with others
         console.warn(`Skipping invalid path: ${sourcePath}`, error);
