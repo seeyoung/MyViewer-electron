@@ -29,45 +29,53 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
   // Load playlists on mount and restore state
   useEffect(() => {
     loadPlaylists();
+    restorePlaybackState();
   }, []);
 
-  // Restore active playlist from localStorage after playlists are loaded
+  // Restore active playlist from DB after playlists are loaded
+  const restorePlaybackState = async () => {
+    try {
+      const state = await window.electronAPI.invoke(channels.PLAYLIST_GET_PLAYBACK_STATE);
+      if (state?.activePlaylistId && playlists.length > 0) {
+        const playlist = playlists.find(p => p.id === state.activePlaylistId);
+        if (playlist) {
+          setActivePlaylist(playlist);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to restore playback state:', error);
+    }
+  };
+
+  // Re-restore when playlists are loaded
   useEffect(() => {
     if (playlists.length > 0 && !activePlaylist) {
-      try {
-        const savedPlaylistId = localStorage.getItem('activePlaylistId');
-        if (savedPlaylistId) {
-          const playlist = playlists.find(p => p.id === savedPlaylistId);
-          if (playlist) {
-            setActivePlaylist(playlist);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to restore active playlist:', error);
-      }
+      restorePlaybackState();
     }
-  }, [playlists, activePlaylist, setActivePlaylist]);
+  }, [playlists.length]);
 
   // Load entries when active playlist changes
   useEffect(() => {
     if (activePlaylist) {
       loadPlaylistEntries(activePlaylist.id);
-      // Save active playlist ID
-      try {
-        localStorage.setItem('activePlaylistId', activePlaylist.id);
-      } catch (error) {
-        console.error('Failed to save active playlist:', error);
-      }
+      // Save active playlist ID to DB
+      savePlaybackState();
     } else {
       setPlaylistEntries([]);
       // Clear saved playlist ID
-      try {
-        localStorage.removeItem('activePlaylistId');
-      } catch (error) {
-        console.error('Failed to clear active playlist:', error);
-      }
+      savePlaybackState();
     }
   }, [activePlaylist?.id]);
+
+  const savePlaybackState = async () => {
+    try {
+      await window.electronAPI.invoke(channels.PLAYLIST_UPDATE_PLAYBACK_STATE, {
+        activePlaylistId: activePlaylist?.id || null,
+      });
+    } catch (error) {
+      console.error('Failed to save playback state:', error);
+    }
+  };
 
   const loadPlaylists = async () => {
     try {
@@ -158,6 +166,15 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
   const handleRemoveEntry = async (position: number) => {
     if (!activePlaylist) return;
 
+    // Find the entry to get its label for confirmation
+    const entry = playlistEntries.find(e => e.position === position);
+    if (!entry) return;
+
+    const confirmed = confirm(
+      `Remove "${entry.label}" from playlist?\n\nPath: ${entry.source_path}`
+    );
+    if (!confirmed) return;
+
     try {
       await window.electronAPI.invoke(channels.PLAYLIST_REMOVE_ENTRY, {
         playlistId: activePlaylist.id,
@@ -186,11 +203,28 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
     const paths = Array.from(files).map(f => f.path);
 
     try {
-      await window.electronAPI.invoke(channels.PLAYLIST_ADD_ENTRIES_BATCH, {
+      const result = await window.electronAPI.invoke(channels.PLAYLIST_ADD_ENTRIES_BATCH, {
         playlistId: activePlaylist.id,
         sourcePaths: paths,
       });
+
       await loadPlaylistEntries(activePlaylist.id);
+
+      // Show summary if any paths were skipped
+      const { skipped } = result;
+      const messages: string[] = [];
+
+      if (skipped.duplicate.length > 0) {
+        messages.push(`${skipped.duplicate.length} duplicate ${skipped.duplicate.length === 1 ? 'path' : 'paths'} skipped`);
+      }
+
+      if (skipped.invalid.length > 0) {
+        messages.push(`${skipped.invalid.length} invalid ${skipped.invalid.length === 1 ? 'path' : 'paths'} skipped`);
+      }
+
+      if (messages.length > 0) {
+        alert(`Added ${result.entries.length} ${result.entries.length === 1 ? 'entry' : 'entries'}.\n${messages.join('\n')}`);
+      }
     } catch (error) {
       console.error('Failed to add entries:', error);
       alert('Failed to add entries: ' + (error as Error).message);

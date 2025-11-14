@@ -166,12 +166,13 @@ class IpcClient {
 
   /**
    * Add multiple sources to playlist
+   * @returns Object with entries array and skipped paths info
    */
   public async addPlaylistEntriesBatch(
     playlistId: string,
     sourcePaths: string[],
     insertPosition?: number
-  ): Promise<any[]> {
+  ): Promise<{ entries: any[]; skipped: { invalid: string[]; duplicate: string[] } }> {
     return this.invoke(channels.PLAYLIST_ADD_ENTRIES_BATCH, {
       playlistId,
       sourcePaths,
@@ -221,6 +222,20 @@ class IpcClient {
    */
   public async cleanupInvalidPlaylistEntries(playlistId: string): Promise<{ removedCount: number }> {
     return this.invoke(channels.PLAYLIST_CLEANUP_INVALID, { playlistId });
+  }
+
+  /**
+   * Get playlist playback state
+   */
+  public async getPlaylistPlaybackState(): Promise<any> {
+    return this.invoke(channels.PLAYLIST_GET_PLAYBACK_STATE);
+  }
+
+  /**
+   * Update playlist playback state
+   */
+  public async updatePlaylistPlaybackState(state: any): Promise<any> {
+    return this.invoke(channels.PLAYLIST_UPDATE_PLAYBACK_STATE, state);
   }
 }
 

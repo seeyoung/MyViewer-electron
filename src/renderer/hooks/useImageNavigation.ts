@@ -28,11 +28,17 @@ export function useImageNavigation() {
   const goToNext = useCallback(async () => {
     if (hasNext) {
       navigateToPage(currentPageIndex + 1);
-    } else if (isPlaylistMode && autoAdvanceToNextEntry) {
-      // At last page of current source, try to advance to next playlist entry
-      const hasNextEntry = currentEntryIndex < playlistEntries.length - 1 || playlistLoopMode === 'playlist';
-      if (hasNextEntry) {
-        await goToNextEntry();
+    } else if (isPlaylistMode) {
+      // At last page of current source
+      if (playlistLoopMode === 'entry') {
+        // Loop back to first page of current entry
+        navigateToPage(0);
+      } else if (autoAdvanceToNextEntry) {
+        // Try to advance to next playlist entry
+        const hasNextEntry = currentEntryIndex < playlistEntries.length - 1 || playlistLoopMode === 'playlist';
+        if (hasNextEntry) {
+          await goToNextEntry();
+        }
       }
     }
   }, [currentPageIndex, hasNext, navigateToPage, isPlaylistMode, autoAdvanceToNextEntry, currentEntryIndex, playlistEntries.length, playlistLoopMode, goToNextEntry]);
@@ -41,13 +47,21 @@ export function useImageNavigation() {
     if (hasPrevious) {
       navigateToPage(currentPageIndex - 1);
     } else if (isPlaylistMode) {
-      // At first page of current source, try to go to previous playlist entry
-      const hasPrevEntry = currentEntryIndex > 0 || playlistLoopMode === 'playlist';
-      if (hasPrevEntry) {
-        await goToPrevEntry();
+      // At first page of current source
+      if (playlistLoopMode === 'entry') {
+        // Loop back to last page of current entry
+        if (totalPages > 0) {
+          navigateToPage(totalPages - 1);
+        }
+      } else {
+        // Try to go to previous playlist entry
+        const hasPrevEntry = currentEntryIndex > 0 || playlistLoopMode === 'playlist';
+        if (hasPrevEntry) {
+          await goToPrevEntry();
+        }
       }
     }
-  }, [currentPageIndex, hasPrevious, navigateToPage, isPlaylistMode, currentEntryIndex, playlistLoopMode, goToPrevEntry]);
+  }, [currentPageIndex, hasPrevious, navigateToPage, isPlaylistMode, currentEntryIndex, playlistLoopMode, totalPages, goToPrevEntry]);
 
   const goToFirst = useCallback(() => {
     navigateToPage(0);

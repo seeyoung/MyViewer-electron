@@ -447,12 +447,13 @@ function getAllImagesFromFolder(folder: any): any[] {
   registry.register(
     channels.PLAYLIST_ADD_ENTRY,
     withErrorHandling(async (event, data: any) => {
-      const { playlistId, sourcePath, position, customLabel } = data;
+      const { playlistId, sourcePath, position, customLabel, allowDuplicate } = data;
       const entry = await playlistService.addSourceToPlaylist(
         playlistId,
         sourcePath,
         position,
-        customLabel
+        customLabel,
+        allowDuplicate
       );
       return entry;
     })
@@ -508,5 +509,22 @@ function getAllImagesFromFolder(folder: any): any[] {
       const { playlistId } = data;
       const removedCount = await playlistService.cleanupInvalidEntries(playlistId);
       return { removedCount };
+    })
+  );
+
+  // Playlist playback state handlers
+  registry.register(
+    channels.PLAYLIST_GET_PLAYBACK_STATE,
+    withErrorHandling(async () => {
+      const state = playlistRepository.getPlaybackState();
+      return state;
+    })
+  );
+
+  registry.register(
+    channels.PLAYLIST_UPDATE_PLAYBACK_STATE,
+    withErrorHandling(async (event, data: any) => {
+      const state = playlistRepository.updatePlaybackState(data);
+      return state;
     })
   );

@@ -68,19 +68,27 @@ export class PlaylistService {
     playlistId: string,
     sourcePath: string,
     position?: number,
-    customLabel?: string
+    customLabel?: string,
+    allowDuplicate = false
   ): Promise<PlaylistEntry> {
     // 1. Security validation
     const sanitizedPath = await this.validateAndSanitizePath(sourcePath);
 
-    // 2. Determine source type (folder or archive)
+    // 2. Check for duplicates
+    const existingEntries = this.repository.getEntries(playlistId);
+    const isDuplicate = existingEntries.some(entry => entry.source_path === sanitizedPath);
+
+    if (isDuplicate && !allowDuplicate) {
+      throw new Error('DUPLICATE_PATH');
+    }
+
+    // 3. Determine source type (folder or archive)
     const sourceType = await this.determineSourceType(sanitizedPath);
 
-    // 3. Generate label
+    // 4. Generate label
     const label = customLabel || path.basename(sanitizedPath);
 
-    // 4. Determine position
-    const existingEntries = this.repository.getEntries(playlistId);
+    // 5. Determine position
     const targetPosition = position !== undefined ? position : existingEntries.length;
 
     // 5. Create entry
@@ -103,19 +111,36 @@ export class PlaylistService {
 
   /**
    * Add multiple sources to playlist in batch
-   * Skips invalid paths and continues with valid ones
+   * Skips invalid paths and duplicates, continues with valid ones
+   * @returns Object with added entries and skip information
    */
   async addMultipleSources(
     playlistId: string,
     sourcePaths: string[],
     insertPosition?: number
-  ): Promise<PlaylistEntry[]> {
+  ): Promise<{
+    entries: PlaylistEntry[];
+    skipped: { invalid: string[]; duplicate: string[] };
+  }> {
     const validEntries: CreatePlaylistEntryParams[] = [];
+    const skippedInvalid: string[] = [];
+    const skippedDuplicate: string[] = [];
+
+    // Get existing entries once
+    const existingEntries = this.repository.getEntries(playlistId);
+    const existingPaths = new Set(existingEntries.map(e => e.source_path));
 
     for (const sourcePath of sourcePaths) {
       try {
         // Validate and sanitize
         const sanitizedPath = await this.validateAndSanitizePath(sourcePath);
+
+        // Check for duplicates
+        if (existingPaths.has(sanitizedPath)) {
+          skippedDuplicate.push(sourcePath);
+          continue;
+        }
+
         const sourceType = await this.determineSourceType(sanitizedPath);
         const label = path.basename(sanitizedPath);
 
@@ -126,17 +151,26 @@ export class PlaylistService {
           source_type: sourceType,
           label,
         });
+
+        // Add to existing paths to catch duplicates within this batch
+        existingPaths.add(sanitizedPath);
       } catch (error) {
         // Skip invalid paths, continue with others
         console.warn(`Skipping invalid path: ${sourcePath}`, error);
+        skippedInvalid.push(sourcePath);
       }
     }
 
-    if (validEntries.length === 0) {
-      return [];
-    }
+    const entries =
+      validEntries.length === 0 ? [] : this.repository.addEntriesBatch(validEntries, insertPosition);
 
-    return this.repository.addEntriesBatch(validEntries, insertPosition);
+    return {
+      entries,
+      skipped: {
+        invalid: skippedInvalid,
+        duplicate: skippedDuplicate,
+      },
+    };
   }
 
   /**

@@ -357,4 +357,92 @@ export class PlaylistRepository {
       thumbnail_path: row.thumbnail_path || undefined,
     };
   }
+
+  /**
+   * Get playlist playback state
+   */
+  getPlaybackState(): PlaylistPlaybackState {
+    const stmt = this.db.prepare(`
+      SELECT
+        active_playlist_id,
+        current_entry_index,
+        is_playing,
+        auto_advance_to_next_entry,
+        loop_mode
+      FROM playlist_playback_state
+      WHERE id = 1
+    `);
+
+    const row = stmt.get();
+    if (!row) {
+      // Return default state if not found
+      return {
+        activePlaylistId: null,
+        currentEntryIndex: -1,
+        isPlaying: false,
+        autoAdvanceToNextEntry: true,
+        loopMode: 'none',
+      };
+    }
+
+    return {
+      activePlaylistId: row.active_playlist_id || null,
+      currentEntryIndex: row.current_entry_index,
+      isPlaying: Boolean(row.is_playing),
+      autoAdvanceToNextEntry: Boolean(row.auto_advance_to_next_entry),
+      loopMode: row.loop_mode as 'none' | 'playlist' | 'entry',
+    };
+  }
+
+  /**
+   * Update playlist playback state
+   */
+  updatePlaybackState(state: Partial<PlaylistPlaybackState>): PlaylistPlaybackState {
+    const now = Date.now();
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (state.activePlaylistId !== undefined) {
+      updates.push('active_playlist_id = ?');
+      values.push(state.activePlaylistId);
+    }
+
+    if (state.currentEntryIndex !== undefined) {
+      updates.push('current_entry_index = ?');
+      values.push(state.currentEntryIndex);
+    }
+
+    if (state.isPlaying !== undefined) {
+      updates.push('is_playing = ?');
+      values.push(state.isPlaying ? 1 : 0);
+    }
+
+    if (state.autoAdvanceToNextEntry !== undefined) {
+      updates.push('auto_advance_to_next_entry = ?');
+      values.push(state.autoAdvanceToNextEntry ? 1 : 0);
+    }
+
+    if (state.loopMode !== undefined) {
+      updates.push('loop_mode = ?');
+      values.push(state.loopMode);
+    }
+
+    if (updates.length === 0) {
+      return this.getPlaybackState();
+    }
+
+    updates.push('updated_at = ?');
+    values.push(now);
+    values.push(1); // id = 1
+
+    const stmt = this.db.prepare(`
+      UPDATE playlist_playback_state
+      SET ${updates.join(', ')}
+      WHERE id = ?
+    `);
+
+    stmt.run(...values);
+
+    return this.getPlaybackState();
+  }
 }
