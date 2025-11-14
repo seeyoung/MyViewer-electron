@@ -9,7 +9,8 @@
 - 폴더(FolderService)만 대상으로 초기 구현
 - 단순 Promise 기반 비동기 청크 처리
 - 기본적인 진행률 UI
-  - 영향 모듈: `FolderService`, `folder:open` IPC, `useArchive`, `FolderSidebar`, `BottomThumbnails`
+  - 영향 모듈: `FolderService`, `folder:open` IPC, `useArchive`, `FolderSidebar`, `viewerStore`
+  - 참고: `BottomThumbnails`는 `images` 배열 자동 구독으로 별도 작업 불필요
 
 ### Phase 2 - 아카이브 추가, 캐싱 도입
 - ArchiveService도 동일한 지연 로딩 전략 적용
@@ -25,14 +26,22 @@
 - Worker Threads 활용
 - 스마트 우선순위 처리 (현재 보는 폴더 우선)
 - 메모리 사용량 제한 및 최적화
+  - 영향 모듈: `FolderService`, `ArchiveService`, Worker 스크립트 파일 (`src/main/workers/`), 메모리 모니터링 유틸
 
 ## 작업 목록
 
+**구현 우선순위 (Phase별 매핑):**
+- **Phase 1**: 섹션 1-8 (타입 정의 ~ 에러 처리)
+- **Phase 2**: 섹션 9-11 (성능 최적화 ~ 세션 복원)
+- **Phase 3**: Worker Threads 관련 (별도 계획 수립)
+- **공통**: 섹션 12-13 (마이그레이션 ~ 테스트)
+
 ### 1. 타입 정의 및 데이터 구조 설계
-- [ ] `FolderOpenInitialResponse` 타입 정의 (initialImages, rootFolder, scanToken)
-- [ ] `ScanProgressEvent` 타입 정의 (token, discovered, processed, currentPath, chunks)
-- [ ] `ScanCompleteEvent` 타입 정의
-- [ ] `ScanStatus` enum 정의 (IDLE, SCANNING, PAUSED, COMPLETED, FAILED, CANCELLED)
+- [ ] `src/shared/types/Scan.ts` 파일 생성
+- [ ] `FolderOpenInitialResponse` 타입 정의 → Scan.ts에 추가
+- [ ] `ScanProgressEvent` 타입 정의 → Scan.ts에 추가
+- [ ] `ScanCompleteEvent` 타입 정의 → Scan.ts에 추가
+- [ ] `ScanStatus` enum 정의 → Scan.ts에 추가
 - [ ] scanToken 생성/검증 로직 설계 (UUID 기반)
 - [ ] 부분 FolderNode 병합 알고리즘 설계
 
@@ -72,6 +81,21 @@ interface ScanCompleteEvent {
 - [ ] `archive:open` 응답 구조도 동일하게 변경 (Phase 2)
 - [ ] `archive:scan-progress` / `archive:scan-complete` 추가 (Phase 2)
 - [ ] IPC 채널 상수를 `src/shared/constants/ipc-channels.ts`에 추가
+- [ ] IPC 핸들러 시그니처 정의 (src/main/ipc/handlers.ts):
+  ```typescript
+  // Request/Response
+  registry.register('folder:open', async (event, path: string): Promise<FolderOpenInitialResponse> => {
+    // ...
+  });
+
+  registry.register('folder:scan-cancel', async (event, token: string): Promise<void> => {
+    // ...
+  });
+
+  // Events (main → renderer)
+  // mainWindow.webContents.send('folder:scan-progress', event: ScanProgressEvent);
+  // mainWindow.webContents.send('folder:scan-complete', event: ScanCompleteEvent);
+  ```
 
 ### 3. 메인 프로세스 백그라운드 스캐너 (FolderService)
 - [ ] `FolderService.openFolder()` 메서드를 두 단계로 분리:
@@ -83,6 +107,30 @@ interface ScanCompleteEvent {
   - **스로틀링**: 청크 간 10ms 대기로 메인 프로세스 과부하 방지
 - [ ] 각 chunk마다 `folder:scan-progress` 이벤트 발행
 - [ ] scanToken으로 요청/응답 매칭 (동시에 여러 폴더 열기 대응)
+- [ ] 스캔 상태 관리 구현:
+  ```typescript
+  class ScanManager {
+    private activeScans = new Map<string, AbortController>();
+
+    startScan(token: string): AbortController {
+      const controller = new AbortController();
+      this.activeScans.set(token, controller);
+      return controller;
+    }
+
+    cancelScan(token: string): void {
+      const controller = this.activeScans.get(token);
+      if (controller) {
+        controller.abort();
+        this.activeScans.delete(token);
+      }
+    }
+
+    isScanning(token: string): boolean {
+      return this.activeScans.has(token);
+    }
+  }
+  ```
 - [ ] 취소 요청 시 스캔 루프 안전하게 중단 및 상태 정리
 - [ ] 스캔 중 에러 발생 시 부분 결과 유지 (graceful degradation)
 
@@ -164,12 +212,46 @@ private async startBackgroundScan(folderPath: string, token: string, offset: num
 )}
 ```
 
-### 6. 초기 이미지 우선 로딩 통합
-- [ ] `useArchive` hook 수정: `FolderOpenInitialResponse` 처리 로직 추가
-- [ ] `initialImages`만 받아도 즉시 `setImages()` 및 첫 이미지 렌더링 가능하도록 분리
-- [ ] IPC 이벤트 리스너 등록: `folder:scan-progress`, `folder:scan-complete`
-- [ ] 백그라운드 스캔 중 새 이미지/폴더 청크 도착 시 스토어에 병합
-- [ ] 스캔 완료 후 전체 이미지 목록 재정렬 및 인덱스 업데이트
+### 6. useArchive Hook 통합 (src/renderer/hooks/useArchive.ts)
+- [ ] `openFolder()` 함수 수정:
+  - `FolderOpenInitialResponse` 타입 처리
+  - `isComplete === false`인 경우 이벤트 리스너 등록
+  - `initialImages`만으로 즉시 `setImages()` 호출 및 첫 이미지 렌더링
+- [ ] IPC 이벤트 리스너 구현:
+  - `folder:scan-progress` → `handleScanProgress()` 함수 생성
+    - 새로운 이미지 청크 수신 시 기존 배열에 병합
+    - `updateScanProgress()` 액션 호출하여 진행률 업데이트
+  - `folder:scan-complete` → `handleScanComplete()` 함수 생성
+    - 스캔 완료 플래그 설정
+    - 전체 이미지 목록 재정렬 (natural sort)
+    - globalIndex 재계산
+- [ ] 스캔 중 청크 병합 로직:
+  ```typescript
+  const handleScanProgress = (event: ScanProgressEvent) => {
+    if (event.token !== currentScanToken) return;
+
+    if (event.imageChunk && event.imageChunk.length > 0) {
+      const currentImages = useViewerStore.getState().images;
+      const mergedImages = [...currentImages, ...event.imageChunk];
+
+      // Natural sort + globalIndex 재계산
+      const sorted = naturalSortBy(mergedImages, 'pathInArchive');
+      sorted.forEach((img, idx) => img.globalIndex = idx);
+
+      setImages(sorted);
+    }
+
+    updateScanProgress({
+      discovered: event.discovered,
+      processed: event.processed,
+      currentPath: event.currentPath,
+      percentage: Math.round((event.processed / event.discovered) * 100),
+    });
+  };
+  ```
+- [ ] 컴포넌트 언마운트 시 이벤트 리스너 정리 (cleanup)
+- [ ] 새 소스 열기 시 기존 스캔 자동 취소
+- [ ] 에러 처리 및 상태 복구 (스캔 실패 시 부분 결과 유지)
 - [ ] SessionService와 통합: 스캔 중 세션 저장 시 `isComplete` 플래그 고려
 
 ### 7. 보안 및 안정성
@@ -332,5 +414,9 @@ const SCAN_LIMITS = {
 
 **마지막 업데이트:** 2025-11-14
 **작성자:** Claude (AI Assistant)
-**버전:** 2.0 (상세 명세 추가)
-- [ ] 영향받는 렌더러 모듈 리스트 업데이트 (`useArchive`, `FolderSidebar`, `BottomThumbnails`, `viewerStore` 등)
+**버전:** 2.1 (보완 사항 반영)
+
+## 변경 이력
+- v2.1 (2025-11-14): 구현 우선순위 추가, 타입 파일 위치 명시, IPC 시그니처 추가, useArchive Hook 상세화, 스캔 상태 관리 클래스 추가
+- v2.0 (2025-11-14): 상세 명세 추가 (타입, 보안, 성능, 테스트)
+- v1.0: 초기 계획 수립
