@@ -248,17 +248,46 @@ export class ThumbnailService {
   }
 
   private buildCacheKey(image: Image, sourceType: SourceType, options: ResolvedOptions): string {
-    const hash = createHash('sha1');
+    const hash = createHash('sha256'); // Changed from sha1 to sha256
+
+    // Use -1 for missing fileSize instead of 0 to avoid collisions
     const size = typeof image.fileSize === 'number'
       ? image.fileSize
-      : (typeof (image as any).size === 'number' ? (image as any).size : 0);
+      : (typeof (image as any).size === 'number' ? (image as any).size : -1);
 
+    // 1. Source type
     hash.update(sourceType);
+
+    // 2. Archive ID
     hash.update(image.archiveId || '');
+
+    // 3. Image ID
     hash.update(image.id || '');
+
+    // 4. File path (ensures uniqueness even with same ID)
+    hash.update(image.pathInArchive || '');
+
+    // 5. File size
     hash.update(String(size));
+
+    // 6. Modification time (if available)
+    if ('mtime' in image && image.mtime) {
+      hash.update(String(image.mtime));
+    }
+
+    // 7. Image dimensions (if available)
+    if (image.dimensions) {
+      hash.update(`${image.dimensions.width}x${image.dimensions.height}`);
+    }
+
+    // 8. Thumbnail options
     hash.update(`${options.maxWidth}x${options.maxHeight}`);
     hash.update(options.format);
+    hash.update(String(options.quality));
+
+    // 9. Version tag (for cache invalidation)
+    hash.update('v2'); // Increment when cache structure changes
+
     return hash.digest('hex');
   }
 
