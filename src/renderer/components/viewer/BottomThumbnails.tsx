@@ -4,7 +4,7 @@ import { Image as ViewerImage } from '@shared/types/Image';
 import * as channels from '@shared/constants/ipc-channels';
 import { SourceType } from '@shared/types/Source';
 import { useInViewport } from '../../hooks/useInViewport';
-import { runThumbnailTask } from '../../utils/thumbnailRequestQueue';
+import { runThumbnailTask, Priority } from '../../utils/thumbnailRequestQueue';
 import { PLACEHOLDER_LOADING, PLACEHOLDER_ERROR } from '../../constants/placeholders';
 
 const MAX_THUMBNAILS = 300;
@@ -71,17 +71,22 @@ const BottomThumbnails: React.FC = () => {
     const maxWidth = Math.round(safeHeight * (4 / 3));
     const upcoming = thumbnailImages.filter(({ index }) => index > currentPageIndex && index <= currentPageIndex + 8);
 
-    upcoming.forEach(({ img }) => {
-      runThumbnailTask(() =>
-        window.electronAPI
-          .invoke(channels.IMAGE_GET_THUMBNAIL, {
-            archiveId: img.archiveId,
-            image: img,
-            sourceType: currentSource.type ?? SourceType.ARCHIVE,
-            maxHeight: safeHeight,
-            maxWidth: Math.max(maxWidth, 48),
-          })
-          .catch(() => undefined)
+    upcoming.forEach(({ img, index }) => {
+      const distance = Math.abs(index - currentPageIndex);
+      const priority = distance <= 2 ? Priority.PREFETCH_NEAR : Priority.PREFETCH_FAR;
+
+      runThumbnailTask(
+        () =>
+          window.electronAPI
+            .invoke(channels.IMAGE_GET_THUMBNAIL, {
+              archiveId: img.archiveId,
+              image: img,
+              sourceType: currentSource.type ?? SourceType.ARCHIVE,
+              maxHeight: safeHeight,
+              maxWidth: Math.max(maxWidth, 48),
+            })
+            .catch(() => undefined),
+        priority
       );
     });
   }, [currentSource, thumbnailImages, currentPageIndex, cardHeight]);
@@ -97,6 +102,7 @@ const BottomThumbnails: React.FC = () => {
             isActive={index === currentPageIndex}
             onSelect={() => navigateToPage(index)}
             panelHeight={cardHeight}
+            distanceFromCurrent={Math.abs(index - currentPageIndex)}
           />
         ))}
       </div>
@@ -135,6 +141,7 @@ interface ThumbnailCardProps {
   onSelect: () => void;
   isActive: boolean;
   panelHeight: number;
+  distanceFromCurrent: number;
 }
 
 interface ThumbnailState {
@@ -144,7 +151,14 @@ interface ThumbnailState {
   height?: number;
 }
 
-const ThumbnailCard: React.FC<ThumbnailCardProps> = ({ image, sourceType, onSelect, isActive, panelHeight }) => {
+const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
+  image,
+  sourceType,
+  onSelect,
+  isActive,
+  panelHeight,
+  distanceFromCurrent,
+}) => {
   const [thumbnail, setThumbnail] = useState<ThumbnailState>({
     dataUrl: PLACEHOLDER_LOADING,
     status: 'loading',
@@ -160,6 +174,14 @@ const ThumbnailCard: React.FC<ThumbnailCardProps> = ({ image, sourceType, onSele
   const retryCountRef = useRef(0);
   const maxRetries = 2;
 
+  // Calculate priority based on distance from current page
+  const getPriority = (): number => {
+    if (isActive) return Priority.CURRENT_VIEW;
+    if (distanceFromCurrent <= 2) return Priority.PREFETCH_NEAR;
+    if (distanceFromCurrent <= 8) return Priority.PREFETCH_FAR;
+    return Priority.BACKGROUND;
+  };
+
   useEffect(() => {
     let cancelled = false;
     if (!isVisible) {
@@ -173,14 +195,16 @@ const ThumbnailCard: React.FC<ThumbnailCardProps> = ({ image, sourceType, onSele
         const safeHeight = Math.max(panelHeight, 48);
         const maxWidth = Math.round(safeHeight * (4 / 3));
 
-        const response: any = await runThumbnailTask(() =>
-          window.electronAPI.invoke(channels.IMAGE_GET_THUMBNAIL, {
-            archiveId: image.archiveId,
-            image,
-            sourceType,
-            maxHeight: safeHeight,
-            maxWidth: Math.max(maxWidth, 48),
-          }) as Promise<any>
+        const response: any = await runThumbnailTask(
+          () =>
+            window.electronAPI.invoke(channels.IMAGE_GET_THUMBNAIL, {
+              archiveId: image.archiveId,
+              image,
+              sourceType,
+              maxHeight: safeHeight,
+              maxWidth: Math.max(maxWidth, 48),
+            }) as Promise<any>,
+          getPriority() // Pass priority to queue
         );
 
         if (!cancelled && response?.dataUrl) {
@@ -233,7 +257,7 @@ const ThumbnailCard: React.FC<ThumbnailCardProps> = ({ image, sourceType, onSele
     return () => {
       cancelled = true;
     };
-  }, [image.id, image.pathInArchive, image.fileSize, sourceType, panelHeight, isVisible]);
+  }, [image.id, image.pathInArchive, image.fileSize, sourceType, panelHeight, isVisible, isActive, distanceFromCurrent]);
 
   useEffect(() => {
     if (image.dimensions) {
