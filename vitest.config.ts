@@ -23,6 +23,7 @@ export default defineConfig({
       '@main': path.resolve(__dirname, './src/main'),
       '@renderer': path.resolve(__dirname, './src/renderer'),
       '@shared': path.resolve(__dirname, './src/shared'),
+      '@lib': path.resolve(__dirname, './src/lib'),
     },
   },
 });
