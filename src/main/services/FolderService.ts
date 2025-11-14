@@ -240,29 +240,48 @@ export class FolderService extends EventEmitter {
     // Try to get cached scan result
     const cachedImages = this.scanCache.getCachedScan(folderPath, mtime);
 
-    let allImages: Image[];
-    let isFromCache = false;
+    let initialImages: Image[];
+    let estimatedTotal: number | undefined;
+    let isComplete: boolean;
 
     if (cachedImages && cachedImages.length > 0) {
-      // Cache hit - use cached images
-      allImages = cachedImages.map(img => ({ ...img, archiveId: sourceId }));
-      isFromCache = true;
+      // ✅ Cache hit - use cached images, emit progressively
+      const allImages = cachedImages.map(img => ({ ...img, archiveId: sourceId }));
       console.log(`✅ Using cached scan for ${folderPath}: ${allImages.length} images`);
+
+      initialImages = allImages.slice(0, INITIAL_SCAN_LIMIT);
+      estimatedTotal = allImages.length;
+      isComplete = allImages.length <= INITIAL_SCAN_LIMIT;
+
+      // Emit remaining images progressively in background
+      if (!isComplete) {
+        setImmediate(() => {
+          this.emitRemainingImagesProgressively(allImages, scanToken, sourceId);
+        });
+      }
     } else {
-      // Cache miss - perform full scan
-      console.log(`❌ Cache miss for ${folderPath}, performing full scan`);
-      allImages = await this.scanFolder(folderPath);
-      allImages.forEach(img => {
+      // ❌ Cache miss - scan root level only, start background scan
+      console.log(`❌ Cache miss for ${folderPath}, scanning root level only`);
+
+      // 1. Scan root level immediately (non-blocking)
+      initialImages = await this.scanSingleLevel(folderPath, folderPath);
+      initialImages.forEach((img, idx) => {
         img.archiveId = sourceId;
+        img.globalIndex = idx;
       });
 
-      // Save to cache asynchronously (don't block return)
-      setImmediate(() => {
-        this.scanCache.saveScan(folderPath, mtime, allImages);
-      });
+      // 2. Check if there are subdirectories
+      const hasSubdirs = await this.hasSubdirectories(folderPath);
+      isComplete = !hasSubdirs && initialImages.length <= INITIAL_SCAN_LIMIT;
+
+      // 3. Start background BFS scan if needed
+      if (!isComplete) {
+        setImmediate(() => {
+          this.startBackgroundScan(folderPath, scanToken, sourceId, mtime, initialImages.length);
+        });
+      }
     }
 
-    const initialImages = allImages.slice(0, INITIAL_SCAN_LIMIT);
     const rootFolder = this.buildFolderTree(initialImages, sourceId);
 
     const source: SourceDescriptor = {
@@ -278,19 +297,12 @@ export class FolderService extends EventEmitter {
       basePath: folderPath,
     });
 
-    const isComplete = isFromCache || allImages.length <= INITIAL_SCAN_LIMIT;
-
-    if (!isComplete) {
-      // Start background scan for remaining images
-      this.emitRemainingImagesProgressively(allImages, scanToken, sourceId);
-    }
-
     return {
       source,
       initialImages,
       rootFolder,
       scanToken,
-      estimatedTotal: isFromCache ? allImages.length : undefined,
+      estimatedTotal,
       isComplete,
     };
   }
@@ -404,15 +416,18 @@ export class FolderService extends EventEmitter {
   private async startBackgroundScan(
     folderPath: string,
     token: string,
-    sourceId: string
+    sourceId: string,
+    mtime: number,
+    initialCount: number
   ): Promise<void> {
     const controller = new AbortController();
     this.activeScans.set(token, controller);
 
     const startTime = Date.now();
-    let discovered = 0;
+    let discovered = initialCount; // Start from initial count
     let processed = 0;
-    const allImages: Image[] = [];
+    const allImagesForCache: Image[] = []; // Collect all images for cache
+    const chunkBuffer: Image[] = [];
 
     // BFS queue: [path, depth]
     const queue: Array<[string, number]> = [[folderPath, 0]];
@@ -464,7 +479,8 @@ export class FolderService extends EventEmitter {
                   isCorrupted: false,
                 };
 
-                allImages.push(image);
+                chunkBuffer.push(image);
+                allImagesForCache.push({ ...image }); // Clone for cache
                 discovered++;
               }
             }
@@ -481,13 +497,13 @@ export class FolderService extends EventEmitter {
         }
 
         // Emit progress
-        if (!controller.signal.aborted && discovered > 0) {
+        if (!controller.signal.aborted && chunkBuffer.length > 0) {
           const progressEvent: ScanProgressEvent = {
             token,
             discovered,
             processed,
             currentPath: batch[batch.length - 1]?.[0] || folderPath,
-            imageChunk: allImages.splice(0, allImages.length),
+            imageChunk: chunkBuffer.splice(0, chunkBuffer.length),
           };
           this.emit('scan-progress', progressEvent);
         }
@@ -496,7 +512,7 @@ export class FolderService extends EventEmitter {
         await new Promise(resolve => setTimeout(resolve, CHUNK_DELAY_MS));
       }
 
-      // Emit complete
+      // Emit complete and save to cache
       if (!controller.signal.aborted) {
         const completeEvent: ScanCompleteEvent = {
           token,
@@ -505,6 +521,14 @@ export class FolderService extends EventEmitter {
           duration: Date.now() - startTime,
         };
         this.emit('scan-complete', completeEvent);
+
+        // Save complete scan to cache asynchronously
+        if (allImagesForCache.length > 0) {
+          setImmediate(() => {
+            this.scanCache.saveScan(folderPath, mtime, allImagesForCache);
+            console.log(`💾 Saved scan to cache: ${folderPath} (${allImagesForCache.length} images)`);
+          });
+        }
       }
     } finally {
       this.activeScans.delete(token);

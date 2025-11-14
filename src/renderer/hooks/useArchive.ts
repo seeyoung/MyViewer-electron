@@ -25,12 +25,27 @@ export function useArchive() {
   useEffect(() => {
     // Folder scan listeners
     const unsubscribeFolderProgress = ipcClient.onFolderScanProgress((event) => {
+      // ✅ Token validation: ignore events from old scans
+      const currentToken = useViewerStore.getState().scanToken;
+      if (event.token !== currentToken) {
+        console.log('⏭️  Ignoring stale folder scan event:', event.token);
+        return;
+      }
+
       setScanStatus(ScanStatus.SCANNING);
+
+      // ✅ Calculate percentage based on estimatedTotal
+      const estimatedTotal = useViewerStore.getState().estimatedTotal;
+      let percentage = 0;
+      if (estimatedTotal && estimatedTotal > 0) {
+        percentage = Math.min(100, Math.max(0, Math.round((event.processed / estimatedTotal) * 100)));
+      }
+
       setScanProgress({
         discovered: event.discovered,
         processed: event.processed,
         currentPath: event.currentPath,
-        percentage: 0, // Will be calculated if estimatedTotal is available
+        percentage,
       });
 
       // Add new images as they're discovered
@@ -40,6 +55,13 @@ export function useArchive() {
     });
 
     const unsubscribeFolderComplete = ipcClient.onFolderScanComplete((event) => {
+      // ✅ Token validation
+      const currentToken = useViewerStore.getState().scanToken;
+      if (event.token !== currentToken) {
+        console.log('⏭️  Ignoring stale folder complete event:', event.token);
+        return;
+      }
+
       setScanStatus(ScanStatus.COMPLETED);
       setScanProgress(null);
       console.log(`✅ Folder scan completed: ${event.totalImages} images in ${event.duration}ms`);
@@ -47,12 +69,26 @@ export function useArchive() {
 
     // Archive scan listeners
     const unsubscribeArchiveProgress = ipcClient.onArchiveScanProgress((event) => {
+      // ✅ Token validation
+      const currentToken = useViewerStore.getState().scanToken;
+      if (event.token !== currentToken) {
+        console.log('⏭️  Ignoring stale archive scan event:', event.token);
+        return;
+      }
+
       setScanStatus(ScanStatus.SCANNING);
+
+      // ✅ Calculate percentage based on discovered (total known)
+      let percentage = 0;
+      if (event.discovered > 0) {
+        percentage = Math.min(100, Math.max(0, Math.round((event.processed / event.discovered) * 100)));
+      }
+
       setScanProgress({
         discovered: event.discovered,
         processed: event.processed,
         currentPath: event.currentPath,
-        percentage: Math.round((event.processed / event.discovered) * 100),
+        percentage,
       });
 
       // Add new images as they're discovered
@@ -62,6 +98,13 @@ export function useArchive() {
     });
 
     const unsubscribeArchiveComplete = ipcClient.onArchiveScanComplete((event) => {
+      // ✅ Token validation
+      const currentToken = useViewerStore.getState().scanToken;
+      if (event.token !== currentToken) {
+        console.log('⏭️  Ignoring stale archive complete event:', event.token);
+        return;
+      }
+
       setScanStatus(ScanStatus.COMPLETED);
       setScanProgress(null);
       console.log(`✅ Archive scan completed: ${event.totalImages} images in ${event.duration}ms`);
@@ -78,6 +121,15 @@ export function useArchive() {
   const openArchive = useCallback(async (filePath: string, password?: string) => {
     setIsOpening(true);
     setError(null);
+
+    // ✅ Cancel previous scan if exists
+    const oldToken = useViewerStore.getState().scanToken;
+    if (oldToken) {
+      console.log('🛑 Cancelling previous scan:', oldToken);
+      await ipcClient.cancelScan(oldToken).catch(err => {
+        console.warn('Failed to cancel previous scan:', err);
+      });
+    }
 
     try {
       // Open archive via IPC
@@ -140,6 +192,15 @@ export function useArchive() {
   const openFolder = useCallback(async (folderPath: string) => {
     setIsOpening(true);
     setError(null);
+
+    // ✅ Cancel previous scan if exists
+    const oldToken = useViewerStore.getState().scanToken;
+    if (oldToken) {
+      console.log('🛑 Cancelling previous scan:', oldToken);
+      await ipcClient.cancelScan(oldToken).catch(err => {
+        console.warn('Failed to cancel previous scan:', err);
+      });
+    }
 
     try {
       const result = await ipcClient.invoke<any>(channels.FOLDER_OPEN, {

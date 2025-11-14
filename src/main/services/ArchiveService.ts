@@ -392,8 +392,8 @@ export class ArchiveService extends EventEmitter {
       isFromCache = true;
       console.log(`✅ Using cached scan for ${filePath}: ${allImages.length} images`);
     } else {
-      // Cache miss - perform full scan
-      console.log(`❌ Cache miss for ${filePath}, performing full scan`);
+      // Cache miss - process initial chunk, scan rest in background
+      console.log(`❌ Cache miss for ${filePath}, processing initial chunk only`);
 
       // Detect format
       format = this.detectArchiveFormat(filePath)!;
@@ -420,8 +420,9 @@ export class ArchiveService extends EventEmitter {
         entry => !entry.isDirectory && isSupportedImageFormat(entry.path)
       );
 
-      // Process all images
-      allImages = imageEntries.map((entry, index) => {
+      // ✅ Process only initial chunk immediately
+      const initialEntries = imageEntries.slice(0, INITIAL_SCAN_LIMIT);
+      const initialImages = initialEntries.map((entry, index) => {
         const sanitizedPath = sanitizePath(entry.path);
         return {
           id: randomUUID(),
@@ -439,17 +440,65 @@ export class ArchiveService extends EventEmitter {
         };
       });
 
-      allImages = naturalSortBy(allImages, 'pathInArchive');
-      allImages.forEach((img, idx) => {
+      const sortedInitial = naturalSortBy(initialImages, 'pathInArchive');
+      sortedInitial.forEach((img, idx) => {
         img.globalIndex = idx;
       });
 
-      // Save to cache asynchronously
-      setImmediate(() => {
-        this.scanCache.saveScan(filePath, mtime, allImages);
-      });
+      const rootFolder = this.buildFolderTree(sortedInitial, archiveId);
+      const source: SourceDescriptor = {
+        id: archiveId,
+        type: SourceType.ARCHIVE,
+        path: filePath,
+        label: fileName,
+      };
+
+      // Create archive object
+      const archive: Archive = {
+        id: archiveId,
+        filePath,
+        fileName,
+        format,
+        fileSize: stats.size,
+        isPasswordProtected,
+        totalImageCount: imageEntries.length,
+        totalFileCount,
+        rootFolder,
+        isOpen: true,
+        openedAt: Date.now(),
+        lastAccessedAt: Date.now(),
+      };
+
+      // Store in cache
+      this.openArchives.set(archiveId, { archive, reader });
+
+      const isComplete = imageEntries.length <= INITIAL_SCAN_LIMIT;
+
+      // ✅ Start background processing for remaining entries
+      if (!isComplete) {
+        setImmediate(() => {
+          this.processRemainingEntries(
+            imageEntries.slice(INITIAL_SCAN_LIMIT),
+            scanToken,
+            archiveId,
+            filePath,
+            mtime,
+            sortedInitial.length
+          );
+        });
+      }
+
+      return {
+        source,
+        initialImages: sortedInitial,
+        rootFolder,
+        scanToken,
+        estimatedTotal: imageEntries.length,
+        isComplete,
+      };
     }
 
+    // Cache hit path
     const initialImages = allImages.slice(0, INITIAL_SCAN_LIMIT);
     const rootFolder = this.buildFolderTree(initialImages, archiveId);
 
@@ -479,11 +528,13 @@ export class ArchiveService extends EventEmitter {
     // Store in cache
     this.openArchives.set(archiveId, { archive, reader });
 
-    const isComplete = isFromCache || allImages.length <= INITIAL_SCAN_LIMIT;
+    const isComplete = allImages.length <= INITIAL_SCAN_LIMIT;
 
     if (!isComplete) {
-      // Start background processing for remaining images
-      this.emitRemainingImagesProgressively(allImages, scanToken, archiveId);
+      // Emit remaining images progressively
+      setImmediate(() => {
+        this.emitRemainingImagesProgressively(allImages, scanToken, archiveId);
+      });
     }
 
     return {
@@ -491,9 +542,97 @@ export class ArchiveService extends EventEmitter {
       initialImages,
       rootFolder,
       scanToken,
-      estimatedTotal: isFromCache ? allImages.length : allImages.length,
+      estimatedTotal: allImages.length,
       isComplete,
     };
+  }
+
+  /**
+   * Process remaining archive entries in background
+   */
+  private async processRemainingEntries(
+    remainingEntries: ArchiveEntry[],
+    token: string,
+    archiveId: string,
+    filePath: string,
+    mtime: number,
+    initialCount: number
+  ): Promise<void> {
+    const controller = new AbortController();
+    this.activeScans.set(token, controller);
+
+    const startTime = Date.now();
+    let discovered = initialCount;
+    const allImagesForCache: Image[] = [];
+
+    try {
+      for (let i = 0; i < remainingEntries.length; i += CHUNK_SIZE) {
+        if (controller.signal.aborted) break;
+
+        const chunk = remainingEntries.slice(i, Math.min(i + CHUNK_SIZE, remainingEntries.length));
+
+        // Process chunk
+        const imageChunk = chunk.map((entry, idx) => {
+          const sanitizedPath = sanitizePath(entry.path);
+          const image: Image = {
+            id: randomUUID(),
+            archiveId,
+            pathInArchive: sanitizedPath,
+            fileName: path.basename(sanitizedPath),
+            folderPath: getParentPath(sanitizedPath) || '/',
+            format: detectFormatFromExtension(entry.path),
+            fileSize: entry.compressedSize,
+            dimensions: undefined,
+            globalIndex: discovered + idx,
+            folderIndex: 0,
+            isLoaded: false,
+            isCorrupted: false,
+          };
+          return image;
+        });
+
+        // Sort chunk naturally
+        const sortedChunk = naturalSortBy(imageChunk, 'pathInArchive');
+        allImagesForCache.push(...sortedChunk);
+        discovered += sortedChunk.length;
+
+        // Emit progress
+        if (!controller.signal.aborted) {
+          const progressEvent: ScanProgressEvent = {
+            token,
+            discovered: initialCount + remainingEntries.length,
+            processed: discovered,
+            currentPath: sortedChunk[sortedChunk.length - 1]?.pathInArchive || '',
+            imageChunk: sortedChunk,
+          };
+          this.emit('scan-progress', progressEvent);
+        }
+
+        // Throttle
+        await new Promise(resolve => setTimeout(resolve, CHUNK_DELAY_MS));
+      }
+
+      // Emit complete
+      if (!controller.signal.aborted) {
+        const completeEvent: ScanCompleteEvent = {
+          token,
+          totalImages: discovered,
+          totalFolders: 1,
+          duration: Date.now() - startTime,
+        };
+        this.emit('scan-complete', completeEvent);
+
+        // Save to cache
+        if (allImagesForCache.length > 0) {
+          setImmediate(() => {
+            this.scanCache.saveScan(filePath, mtime, allImagesForCache);
+            console.log(`💾 Saved archive scan to cache: ${filePath} (${allImagesForCache.length} images)`);
+          });
+        }
+      }
+    } finally {
+      this.activeScans.delete(token);
+    }
   }
 
   /**

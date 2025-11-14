@@ -1,8 +1,10 @@
 import React, { useCallback, useMemo } from 'react';
 import { useViewerStore } from '../../store/viewerStore';
 import { useImageNavigation } from '../../hooks/useImageNavigation';
+import { useArchive } from '../../hooks/useArchive';
 import { Image as ViewerImage } from '@shared/types/Image';
 import { SourceDescriptor, SourceType } from '@shared/types/Source';
+import { ScanStatus } from '@shared/types/Scan';
 import { Priority } from '../../utils/thumbnailRequestQueue';
 import { useThumbnailLoader } from '../../hooks/useThumbnailLoader';
 import { useAutoCenter } from '../../hooks/useAutoCenter';
@@ -61,7 +63,11 @@ const FolderSidebar: React.FC = () => {
   const setSidebarTab = useViewerStore((state) => state.setSidebarTab);
   const sidebarWidth = useViewerStore((state) => state.sidebarWidth);
   const getFolderPosition = useViewerStore((state) => state.getFolderPosition);
+  const scanStatus = useViewerStore((state) => state.scanStatus);
+  const scanProgress = useViewerStore((state) => state.scanProgress);
+  const scanToken = useViewerStore((state) => state.scanToken);
   const { currentPageIndex } = useImageNavigation();
+  const { cancelScan } = useArchive();
 
   const folders = useMemo(() => buildFolderList(images, currentSource?.path || ''), [images, currentSource]);
   const thumbnailImages = useMemo(() => {
@@ -96,6 +102,12 @@ const FolderSidebar: React.FC = () => {
     }
   };
 
+  const handleCancelScan = useCallback(() => {
+    if (scanToken) {
+      cancelScan(scanToken);
+    }
+  }, [scanToken, cancelScan]);
+
   return (
     <aside className="folder-sidebar" style={{ width: sidebarWidth }}>
       <div className="sidebar-tabs">
@@ -112,6 +124,38 @@ const FolderSidebar: React.FC = () => {
           Thumbnails
         </button>
       </div>
+
+      {/* Scan Progress UI */}
+      {scanStatus === ScanStatus.SCANNING && scanProgress && (
+        <div className="scan-progress">
+          <div className="scan-progress-header">
+            <span className="scan-status-text">
+              📡 Scanning... {scanProgress.discovered} images found
+            </span>
+            <button
+              className="scan-cancel-btn"
+              onClick={handleCancelScan}
+              title="Cancel scan"
+            >
+              ✕
+            </button>
+          </div>
+          {scanProgress.percentage > 0 && (
+            <div className="scan-progress-bar">
+              <div
+                className="scan-progress-fill"
+                style={{ width: `${scanProgress.percentage}%` }}
+              />
+            </div>
+          )}
+          {scanProgress.currentPath && (
+            <div className="scan-current-path" title={scanProgress.currentPath}>
+              {scanProgress.currentPath}
+            </div>
+          )}
+        </div>
+      )}
+
       {sidebarTab === 'folders' ? (
         <div className="folder-list">
           {folders.map((folder) => (
@@ -161,6 +205,54 @@ const FolderSidebar: React.FC = () => {
         .sidebar-tab.active {
           background: rgba(255, 255, 255, 0.08);
           color: #fff;
+        }
+        .scan-progress {
+          background: rgba(45, 168, 255, 0.1);
+          border-bottom: 1px solid rgba(45, 168, 255, 0.3);
+          padding: 0.5rem;
+          font-size: 0.75rem;
+        }
+        .scan-progress-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 0.25rem;
+        }
+        .scan-status-text {
+          color: #2da8ff;
+          font-weight: 500;
+        }
+        .scan-cancel-btn {
+          background: rgba(255, 68, 68, 0.2);
+          border: 1px solid rgba(255, 68, 68, 0.4);
+          color: #ff4444;
+          padding: 0.125rem 0.375rem;
+          border-radius: 3px;
+          cursor: pointer;
+          font-size: 0.875rem;
+          line-height: 1;
+        }
+        .scan-cancel-btn:hover {
+          background: rgba(255, 68, 68, 0.3);
+        }
+        .scan-progress-bar {
+          height: 4px;
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 2px;
+          overflow: hidden;
+          margin-bottom: 0.25rem;
+        }
+        .scan-progress-fill {
+          height: 100%;
+          background: linear-gradient(90deg, #2da8ff, #1e88e5);
+          transition: width 0.3s ease;
+        }
+        .scan-current-path {
+          color: #999;
+          font-size: 0.7rem;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
         .folder-list {
           flex: 1;
