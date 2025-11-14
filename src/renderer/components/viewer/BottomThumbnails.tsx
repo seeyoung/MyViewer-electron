@@ -3,8 +3,8 @@ import { useViewerStore } from '../../store/viewerStore';
 import { Image as ViewerImage } from '@shared/types/Image';
 import * as channels from '@shared/constants/ipc-channels';
 import { SourceType } from '@shared/types/Source';
-import { useInViewport } from '../../hooks/useInViewport';
-import { runThumbnailTask, Priority } from '../../utils/thumbnailRequestQueue';
+import { useInViewportShared } from '../../hooks/useInViewport';
+import { runThumbnailTask, Priority, updateThumbnailConcurrency } from '../../utils/thumbnailRequestQueue';
 import { PLACEHOLDER_LOADING, PLACEHOLDER_ERROR } from '../../constants/placeholders';
 
 const MAX_THUMBNAILS = 300;
@@ -62,6 +62,48 @@ const BottomThumbnails: React.FC = () => {
     () => images.map((img, index) => ({ img, index })).slice(0, MAX_THUMBNAILS),
     [images]
   );
+
+  // Dynamic concurrency adjustment based on scroll activity
+  useEffect(() => {
+    const container = containerRef.current?.querySelector('.thumbnail-strip');
+    if (!container) return;
+
+    let scrollTimeout: NodeJS.Timeout;
+    let lastScrollTime = Date.now();
+
+    const handleScroll = () => {
+      const now = Date.now();
+      const timeSinceLastScroll = now - lastScrollTime;
+      lastScrollTime = now;
+
+      // Calculate user activity score based on scroll frequency
+      const activityScore = Math.min(1, timeSinceLastScroll < 100 ? 0.8 : 0.3);
+
+      // Set to busy during scroll
+      updateThumbnailConcurrency({
+        throttleLevel: 'busy',
+        userActivityScore: activityScore,
+      });
+
+      // Clear existing timeout
+      clearTimeout(scrollTimeout);
+
+      // After scroll stops, set to idle
+      scrollTimeout = setTimeout(() => {
+        updateThumbnailConcurrency({
+          throttleLevel: 'idle',
+          userActivityScore: 1.0,
+        });
+      }, 300);
+    };
+
+    container.addEventListener('scroll', handleScroll);
+
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      clearTimeout(scrollTimeout);
+    };
+  }, []);
 
   useEffect(() => {
     if (!currentSource) {
@@ -170,7 +212,7 @@ const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
     return 'landscape';
   });
   const cardRef = useRef<HTMLButtonElement | null>(null);
-  const isVisible = useInViewport(cardRef, { rootMargin: '96px 0px', threshold: 0, freezeOnceVisible: true });
+  const isVisible = useInViewportShared(cardRef, { rootMargin: '96px 0px', threshold: 0, freezeOnceVisible: true });
   const retryCountRef = useRef(0);
   const maxRetries = 2;
 
