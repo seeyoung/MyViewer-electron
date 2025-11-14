@@ -14,6 +14,12 @@ export function useKeyboardShortcuts() {
   const setAutoSlideInterval = useViewerStore(state => state.setAutoSlideInterval);
   const showAutoSlideOverlay = useViewerStore(state => state.showAutoSlideOverlay);
 
+  // Playlist shortcuts
+  const goToNextEntry = useViewerStore(state => state.goToNextEntry);
+  const goToPrevEntry = useViewerStore(state => state.goToPrevEntry);
+  const togglePlaylistPanel = useViewerStore(state => state.togglePlaylistPanel);
+  const isPlaylistMode = useViewerStore(state => state.isPlaylistMode);
+
   useEffect(() => {
     console.log('⌨️  Initializing keyboard shortcuts...');
 
@@ -40,8 +46,34 @@ export function useKeyboardShortcuts() {
       switch (event.code) {
         case 'ArrowRight':
         case 'PageDown':
-          event.preventDefault();
-          goToNext();
+          // Ctrl/Cmd + Right Arrow: Next playlist entry
+          if ((event.ctrlKey || event.metaKey) && isPlaylistMode) {
+            event.preventDefault();
+            goToNextEntry();
+          } else {
+            event.preventDefault();
+            goToNext();
+          }
+          break;
+
+        case 'ArrowLeft':
+        case 'PageUp':
+          // Ctrl/Cmd + Left Arrow: Previous playlist entry
+          if ((event.ctrlKey || event.metaKey) && isPlaylistMode) {
+            event.preventDefault();
+            goToPrevEntry();
+          } else {
+            event.preventDefault();
+            goToPrevious();
+          }
+          break;
+
+        case 'KeyP':
+          // 'P' key: Toggle playlist panel
+          if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
+            event.preventDefault();
+            togglePlaylistPanel();
+          }
           break;
 
         case 'Enter': // Enter key for fullscreen
@@ -55,12 +87,6 @@ export function useKeyboardShortcuts() {
             // 다음 이미지
             goToNext();
           }
-          break;
-
-        case 'ArrowLeft':
-        case 'PageUp':
-          event.preventDefault();
-          goToPrevious();
           break;
 
         case 'ArrowUp':

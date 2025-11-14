@@ -1,7 +1,11 @@
 import React from 'react';
 import { useViewerStore } from '../../store/viewerStore';
 
-const PlaylistControls: React.FC = () => {
+interface PlaylistControlsProps {
+  onCleanupInvalid?: () => void;
+}
+
+const PlaylistControls: React.FC<PlaylistControlsProps> = ({ onCleanupInvalid }) => {
   const isPlaylistMode = useViewerStore(state => state.isPlaylistMode);
   const autoAdvanceToNextEntry = useViewerStore(state => state.autoAdvanceToNextEntry);
   const playlistLoopMode = useViewerStore(state => state.playlistLoopMode);
@@ -83,6 +87,19 @@ const PlaylistControls: React.FC = () => {
           Next ⏭
         </button>
       </div>
+
+      {onCleanupInvalid && (
+        <div className="control-section">
+          <button
+            className="cleanup-button"
+            onClick={onCleanupInvalid}
+            disabled={!hasEntries}
+            title="Remove entries that point to non-existent files/folders"
+          >
+            🧹 Cleanup Invalid
+          </button>
+        </div>
+      )}
 
       <style>{`
         .playlist-controls {
@@ -182,6 +199,28 @@ const PlaylistControls: React.FC = () => {
           white-space: nowrap;
           min-width: 60px;
           text-align: center;
+        }
+
+        .cleanup-button {
+          width: 100%;
+          padding: 0.5rem;
+          background-color: #1d1d1d;
+          border: 1px solid #ff9e4a;
+          border-radius: 4px;
+          color: #ff9e4a;
+          cursor: pointer;
+          font-size: 0.875rem;
+          transition: all 0.2s;
+        }
+
+        .cleanup-button:hover:not(:disabled) {
+          background-color: #ff9e4a;
+          color: #1d1d1d;
+        }
+
+        .cleanup-button:disabled {
+          opacity: 0.3;
+          cursor: not-allowed;
         }
       `}</style>
     </div>

@@ -326,11 +326,20 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   togglePlaylistPanel: () =>
     set((state) => ({ showPlaylistPanel: !state.showPlaylistPanel })),
 
-  goToNextEntry: async () => {
+  goToNextEntry: async (failedAttempts = 0) => {
     const state = get();
     const { playlistEntries, currentEntryIndex, playlistLoopMode } = state;
 
     if (playlistEntries.length === 0) {
+      return;
+    }
+
+    // Stop after 3 consecutive failures
+    if (failedAttempts >= 3) {
+      set({
+        error: 'Failed to open 3 consecutive playlist entries. Please check your files.',
+        isLoading: false
+      });
       return;
     }
 
@@ -367,7 +376,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
 
       const { source, session, initialImages } = result;
 
-      // Update store with new source
+      // Update store with new source - success, reset failed attempts
       set({
         currentSource: source,
         currentSession: session,
@@ -379,18 +388,34 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       console.log(`Opened ${nextEntry.source_type}:`, nextEntry.source_path);
     } catch (error) {
       console.error('Failed to open next playlist entry:', error);
+
+      // Show error briefly, then try next entry
       set({
-        error: `Failed to open: ${nextEntry.label}`,
-        isLoading: false
+        error: `Skipping invalid entry: ${nextEntry.label}`,
+        isLoading: true
       });
+
+      // Auto-retry with next entry after brief delay
+      setTimeout(async () => {
+        await get().goToNextEntry(failedAttempts + 1);
+      }, 500);
     }
   },
 
-  goToPrevEntry: async () => {
+  goToPrevEntry: async (failedAttempts = 0) => {
     const state = get();
     const { playlistEntries, currentEntryIndex, playlistLoopMode } = state;
 
     if (playlistEntries.length === 0) {
+      return;
+    }
+
+    // Stop after 3 consecutive failures
+    if (failedAttempts >= 3) {
+      set({
+        error: 'Failed to open 3 consecutive playlist entries. Please check your files.',
+        isLoading: false
+      });
       return;
     }
 
@@ -427,7 +452,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
 
       const { source, session, initialImages } = result;
 
-      // Update store with new source
+      // Update store with new source - success
       set({
         currentSource: source,
         currentSession: session,
@@ -439,10 +464,17 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       console.log(`Opened ${prevEntry.source_type}:`, prevEntry.source_path);
     } catch (error) {
       console.error('Failed to open previous playlist entry:', error);
+
+      // Show error briefly, then try previous entry
       set({
-        error: `Failed to open: ${prevEntry.label}`,
-        isLoading: false
+        error: `Skipping invalid entry: ${prevEntry.label}`,
+        isLoading: true
       });
+
+      // Auto-retry with previous entry after brief delay
+      setTimeout(async () => {
+        await get().goToPrevEntry(failedAttempts + 1);
+      }, 500);
     }
   },
 

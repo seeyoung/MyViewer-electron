@@ -26,17 +26,46 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [draggedPosition, setDraggedPosition] = useState<number | null>(null);
 
-  // Load playlists on mount
+  // Load playlists on mount and restore state
   useEffect(() => {
     loadPlaylists();
   }, []);
+
+  // Restore active playlist from localStorage after playlists are loaded
+  useEffect(() => {
+    if (playlists.length > 0 && !activePlaylist) {
+      try {
+        const savedPlaylistId = localStorage.getItem('activePlaylistId');
+        if (savedPlaylistId) {
+          const playlist = playlists.find(p => p.id === savedPlaylistId);
+          if (playlist) {
+            setActivePlaylist(playlist);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to restore active playlist:', error);
+      }
+    }
+  }, [playlists, activePlaylist, setActivePlaylist]);
 
   // Load entries when active playlist changes
   useEffect(() => {
     if (activePlaylist) {
       loadPlaylistEntries(activePlaylist.id);
+      // Save active playlist ID
+      try {
+        localStorage.setItem('activePlaylistId', activePlaylist.id);
+      } catch (error) {
+        console.error('Failed to save active playlist:', error);
+      }
     } else {
       setPlaylistEntries([]);
+      // Clear saved playlist ID
+      try {
+        localStorage.removeItem('activePlaylistId');
+      } catch (error) {
+        console.error('Failed to clear active playlist:', error);
+      }
     }
   }, [activePlaylist?.id]);
 
@@ -98,6 +127,32 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
   const handlePlaylistSelect = (playlistId: string) => {
     const playlist = playlists.find(p => p.id === playlistId);
     setActivePlaylist(playlist || null);
+  };
+
+  const handleCleanupInvalidEntries = async () => {
+    if (!activePlaylist) return;
+
+    const confirmed = confirm(
+      'This will remove all entries that point to non-existent or inaccessible files/folders. Continue?'
+    );
+    if (!confirmed) return;
+
+    try {
+      const result = await window.electronAPI.invoke(channels.PLAYLIST_CLEANUP_INVALID, {
+        playlistId: activePlaylist.id,
+      });
+
+      const removedCount = result.removedCount || 0;
+      if (removedCount > 0) {
+        alert(`Removed ${removedCount} invalid ${removedCount === 1 ? 'entry' : 'entries'}`);
+        await loadPlaylistEntries(activePlaylist.id);
+      } else {
+        alert('No invalid entries found');
+      }
+    } catch (error) {
+      console.error('Failed to cleanup invalid entries:', error);
+      alert('Failed to cleanup invalid entries: ' + (error as Error).message);
+    }
   };
 
   const handleRemoveEntry = async (position: number) => {
@@ -253,7 +308,7 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
           </div>
         )}
 
-        {activePlaylist && <PlaylistControls />}
+        {activePlaylist && <PlaylistControls onCleanupInvalid={handleCleanupInvalidEntries} />}
 
         <div
           className={`playlist-drop-zone ${isDragOver ? 'drag-over' : ''} ${!activePlaylist ? 'disabled' : ''}`}
