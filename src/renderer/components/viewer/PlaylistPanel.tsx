@@ -49,6 +49,7 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
   const [editingName, setEditingName] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [entryValidityMap, setEntryValidityMap] = useState<Map<number, boolean>>(new Map());
+  const [searchQuery, setSearchQuery] = useState('');
 
   // @dnd-kit sensors for drag and drop
   const sensors = useSensors(
@@ -57,6 +58,14 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+
+  // Filter entries based on search query
+  const filteredEntries = searchQuery.trim()
+    ? playlistEntries.filter(entry =>
+        entry.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        entry.source_path.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : playlistEntries;
 
   // Load playlists on mount and restore state
   useEffect(() => {
@@ -565,6 +574,30 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
           />
         )}
 
+        {activePlaylist && playlistEntries.length > 0 && (
+          <div className="search-container">
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Search entries..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                className="clear-search"
+                onClick={() => setSearchQuery('')}
+                title="Clear search"
+              >
+                ✕
+              </button>
+            )}
+            <div className="search-results-count">
+              {filteredEntries.length} / {playlistEntries.length} entries
+            </div>
+          </div>
+        )}
+
         <div
           className={`playlist-drop-zone ${isDragOver ? 'drag-over' : ''} ${!activePlaylist ? 'disabled' : ''}`}
           onDrop={handleDrop}
@@ -575,6 +608,8 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
             <p>Select or create a playlist to add entries</p>
           ) : playlistEntries.length === 0 ? (
             <p>Drop files or folders here to add to playlist</p>
+          ) : filteredEntries.length === 0 ? (
+            <p className="no-results">No entries match your search</p>
           ) : (
             <DndContext
               sensors={sensors}
@@ -582,15 +617,15 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
               onDragEnd={handleDragEnd}
             >
               <SortableContext
-                items={playlistEntries.map(e => e.position)}
+                items={filteredEntries.map(e => e.position)}
                 strategy={verticalListSortingStrategy}
               >
                 <div className="playlist-entry-list">
-                  {playlistEntries.map((entry, index) => (
+                  {filteredEntries.map((entry) => (
                     <PlaylistEntry
                       key={entry.position}
                       entry={entry}
-                      isActive={index === currentEntryIndex}
+                      isActive={entry.position === currentEntryIndex}
                       isValid={entryValidityMap.get(entry.position) ?? true}
                       onClick={() => handleEntryClick(entry.position)}
                       onRemove={() => handleRemoveEntry(entry.position)}
@@ -754,6 +789,66 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
           .playlist-create-form button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+          }
+
+          .search-container {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #3d3d3d;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            position: relative;
+          }
+
+          .search-input {
+            flex: 1;
+            padding: 0.5rem 0.75rem;
+            background-color: #1d1d1d;
+            border: 1px solid #3d3d3d;
+            border-radius: 4px;
+            color: #ffffff;
+            font-size: 0.875rem;
+            outline: none;
+          }
+
+          .search-input:focus {
+            border-color: #4a9eff;
+          }
+
+          .clear-search {
+            position: absolute;
+            right: 6rem;
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 0.25rem 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: all 0.2s;
+          }
+
+          .clear-search:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #fff;
+          }
+
+          .search-results-count {
+            color: #888;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            min-width: 5rem;
+            text-align: right;
+          }
+
+          .no-results {
+            text-align: center;
+            color: #888;
+            padding: 2rem 1rem;
+            font-size: 0.875rem;
           }
 
           .playlist-drop-zone {
