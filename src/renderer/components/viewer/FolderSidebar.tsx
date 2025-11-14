@@ -211,6 +211,7 @@ const FolderSidebar: React.FC = () => {
           width: 100%;
           height: 100%;
           object-fit: cover;
+          object-position: center;
           display: block;
         }
         .thumbnail-item img.loading {
@@ -251,6 +252,7 @@ interface ThumbnailGridProps {
 }
 
 const ThumbnailGrid: React.FC<ThumbnailGridProps> = ({ images, source, onSelect, width }) => {
+  const currentPageIndex = useViewerStore((state) => state.currentPageIndex);
   const targetWidth = Math.max(120, width - 60);
   const columnWidth = Math.min(320, targetWidth);
   const cellHeight = Math.round(columnWidth * 0.75);
@@ -268,6 +270,7 @@ const ThumbnailGrid: React.FC<ThumbnailGridProps> = ({ images, source, onSelect,
           source={source}
           onSelect={() => onSelect(index)}
           height={cellHeight}
+          isActive={index === currentPageIndex}
         />
       ))}
     </div>
@@ -279,6 +282,7 @@ interface ThumbnailItemProps {
   source: SourceDescriptor | null;
   onSelect: () => void;
   height: number;
+  isActive: boolean;
 }
 
 interface ThumbnailState {
@@ -286,7 +290,7 @@ interface ThumbnailState {
   status: 'loading' | 'success' | 'error';
 }
 
-const ThumbnailItem: React.FC<ThumbnailItemProps> = ({ image, source, onSelect, height }) => {
+const ThumbnailItem: React.FC<ThumbnailItemProps> = ({ image, source, onSelect, height, isActive }) => {
   const [thumbnail, setThumbnail] = useState<ThumbnailState>({
     dataUrl: PLACEHOLDER_LOADING,
     status: 'loading',
@@ -294,11 +298,13 @@ const ThumbnailItem: React.FC<ThumbnailItemProps> = ({ image, source, onSelect, 
   const itemRef = useRef<HTMLButtonElement | null>(null);
   const isVisible = useInViewportShared(itemRef, { rootMargin: '64px 0px', threshold: 0, freezeOnceVisible: true });
   const retryCountRef = useRef(0);
+  const hasLoadedRef = useRef(false);
+  const gridRef = useRef<HTMLButtonElement | null>(null);
   const maxRetries = 2;
 
   useEffect(() => {
     let cancelled = false;
-    if (!isVisible) {
+    if (!isVisible || hasLoadedRef.current) {
       return undefined;
     }
 
@@ -321,6 +327,7 @@ const ThumbnailItem: React.FC<ThumbnailItemProps> = ({ image, source, onSelect, 
             dataUrl: response.dataUrl as string,
             status: 'success',
           });
+          hasLoadedRef.current = true;
           retryCountRef.current = 0;
           return;
         }
@@ -357,9 +364,33 @@ const ThumbnailItem: React.FC<ThumbnailItemProps> = ({ image, source, onSelect, 
     };
   }, [image.archiveId, image, isVisible, source?.type]);
 
+  useEffect(() => {
+    hasLoadedRef.current = false;
+    retryCountRef.current = 0;
+    setThumbnail({ dataUrl: PLACEHOLDER_LOADING, status: 'loading' });
+  }, [image.id]);
+
+  useEffect(() => {
+    if (!thumbnail || thumbnail.status !== 'success' || !itemRef.current) {
+      return;
+    }
+
+    const container = itemRef.current.parentElement as HTMLElement | null;
+    if (!container) {
+      return;
+    }
+
+    const containerHeight = container.clientHeight;
+    const cardHeight = itemRef.current.clientHeight;
+    const targetTop = itemRef.current.offsetTop - (containerHeight / 2 - cardHeight / 2);
+    const clampedTop = Math.max(0, Math.min(targetTop, container.scrollHeight - containerHeight));
+
+    container.scrollTo({ top: clampedTop, behavior: 'smooth' });
+  }, [thumbnail?.status]);
+
   return (
     <button
-      className={`thumbnail-item ${thumbnail.status}`}
+      className={`thumbnail-item ${thumbnail.status} ${isActive ? 'active' : ''}`}
       onClick={onSelect}
       title={thumbnail.status === 'error' ? `Failed to load: ${image.pathInArchive}` : image.pathInArchive}
       style={{ height }}

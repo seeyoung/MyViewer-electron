@@ -185,7 +185,22 @@ export class ThumbnailService {
     params: { archiveId: string; image: Image; sourceType: SourceType }
   ): Promise<ThumbnailResponse> {
     await fs.mkdir(this.cacheDir, { recursive: true });
-    const cachePath = this.getCachePath(cacheKey, options.format);
+    const normalizeDimension = (value: number | undefined) => {
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        return undefined;
+      }
+      return Math.round(parsed);
+    };
+
+    const normalizedOptions: ResolvedOptions = {
+      ...options,
+      maxWidth: normalizeDimension(options.maxWidth) ?? this.defaultOptions.maxWidth,
+      maxHeight: normalizeDimension(options.maxHeight) ?? this.defaultOptions.maxHeight,
+      format: options.format ?? this.defaultOptions.format,
+      quality: options.quality ?? this.defaultOptions.quality,
+    };
+    const cachePath = this.getCachePath(cacheKey, normalizedOptions.format);
     const cacheFilename = path.basename(cachePath);
 
     if (await this.fileExists(cachePath)) {
@@ -199,12 +214,12 @@ export class ThumbnailService {
     const { data, info } = await sharp(sourceBuffer)
       .rotate()
       .resize({
-        width: options.maxWidth,
-        height: options.maxHeight,
+        width: normalizedOptions.maxWidth,
+        height: normalizedOptions.maxHeight,
         fit: 'inside',
         withoutEnlargement: true,
       })
-      .toFormat(options.format, { quality: options.quality })
+      .toFormat(normalizedOptions.format, { quality: normalizedOptions.quality })
       .toBuffer({ resolveWithObject: true });
 
     await fs.writeFile(cachePath, data);
@@ -217,9 +232,9 @@ export class ThumbnailService {
 
     return {
       dataUrl: this.bufferToDataUrl(data, options.format),
-      width: info.width ?? options.maxWidth,
-      height: info.height ?? options.maxHeight,
-      format: options.format,
+      width: info.width ?? normalizedOptions.maxWidth,
+      height: info.height ?? normalizedOptions.maxHeight,
+      format: normalizedOptions.format,
     };
   }
 
@@ -248,45 +263,35 @@ export class ThumbnailService {
   }
 
   private buildCacheKey(image: Image, sourceType: SourceType, options: ResolvedOptions): string {
-    const hash = createHash('sha256'); // Changed from sha1 to sha256
+    const hash = createHash('sha256');
 
-    // Use -1 for missing fileSize instead of 0 to avoid collisions
+    // Normalize inputs to avoid undefined reaching hash.update
+    const safeSourceType = sourceType ?? SourceType.ARCHIVE;
+    const safeArchiveId = image.archiveId ?? '';
+    const safeImageId = image.id ?? '';
+    const safePath = image.pathInArchive ?? '';
     const size = typeof image.fileSize === 'number'
       ? image.fileSize
       : (typeof (image as any).size === 'number' ? (image as any).size : -1);
 
-    // 1. Source type
-    hash.update(sourceType);
-
-    // 2. Archive ID
-    hash.update(image.archiveId || '');
-
-    // 3. Image ID
-    hash.update(image.id || '');
-
-    // 4. File path (ensures uniqueness even with same ID)
-    hash.update(image.pathInArchive || '');
-
-    // 5. File size
+    hash.update(String(safeSourceType));
+    hash.update(String(safeArchiveId));
+    hash.update(String(safeImageId));
+    hash.update(String(safePath));
     hash.update(String(size));
 
-    // 6. Modification time (if available)
     if ('mtime' in image && image.mtime) {
       hash.update(String(image.mtime));
     }
 
-    // 7. Image dimensions (if available)
     if (image.dimensions) {
-      hash.update(`${image.dimensions.width}x${image.dimensions.height}`);
+      hash.update(`${image.dimensions.width ?? 0}x${image.dimensions.height ?? 0}`);
     }
 
-    // 8. Thumbnail options
     hash.update(`${options.maxWidth}x${options.maxHeight}`);
-    hash.update(options.format);
-    hash.update(String(options.quality));
-
-    // 9. Version tag (for cache invalidation)
-    hash.update('v2'); // Increment when cache structure changes
+    hash.update(options.format ?? 'webp');
+    hash.update(String(options.quality ?? this.defaultOptions.quality));
+    hash.update('v2');
 
     return hash.digest('hex');
   }

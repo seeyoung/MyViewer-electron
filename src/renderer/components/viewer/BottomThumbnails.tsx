@@ -215,6 +215,7 @@ const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
   const isVisible = useInViewportShared(cardRef, { rootMargin: '96px 0px', threshold: 0, freezeOnceVisible: true });
   const retryCountRef = useRef(0);
   const maxRetries = 2;
+  const hasLoadedRef = useRef(false);
 
   // Calculate priority based on distance from current page
   const getPriority = (): number => {
@@ -226,7 +227,7 @@ const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
 
   useEffect(() => {
     let cancelled = false;
-    if (!isVisible) {
+    if (!isVisible || hasLoadedRef.current) {
       return undefined;
     }
 
@@ -259,6 +260,8 @@ const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
             width,
             height,
           });
+
+          hasLoadedRef.current = true;
 
           if (typeof height === 'number' && typeof width === 'number') {
             setOrientation(height > width ? 'portrait' : 'landscape');
@@ -299,13 +302,36 @@ const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [image.id, image.pathInArchive, image.fileSize, sourceType, panelHeight, isVisible, isActive, distanceFromCurrent]);
+  }, [image.id, image.pathInArchive, image.fileSize, sourceType, panelHeight, isVisible, distanceFromCurrent, isActive]);
+
+  useEffect(() => {
+    hasLoadedRef.current = false;
+    retryCountRef.current = 0;
+  }, [image.id]);
 
   useEffect(() => {
     if (image.dimensions) {
       setOrientation(image.dimensions.height > image.dimensions.width ? 'portrait' : 'landscape');
     }
   }, [image.dimensions]);
+
+  useEffect(() => {
+    if (!isActive || !cardRef.current) {
+      return;
+    }
+
+    const container = cardRef.current.parentElement as HTMLElement | null;
+    if (!container) {
+      return;
+    }
+
+    const containerWidth = container.clientWidth;
+    const cardWidth = cardRef.current.clientWidth;
+    const targetLeft = cardRef.current.offsetLeft - (containerWidth / 2 - cardWidth / 2);
+    const clampedLeft = Math.max(0, Math.min(targetLeft, container.scrollWidth - containerWidth));
+
+    container.scrollTo({ left: clampedLeft, behavior: 'smooth' });
+  }, [isActive]);
 
   return (
     <button
@@ -368,6 +394,7 @@ const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
           width: 100%;
           height: 100%;
           object-fit: cover;
+          object-position: center;
           background: #111;
         }
         .thumbnail-card img.loading {
@@ -380,6 +407,7 @@ const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
         }
         .thumbnail-card.portrait img {
           object-fit: contain;
+          object-position: center;
         }
         .error-badge {
           position: absolute;
