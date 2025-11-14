@@ -15,6 +15,7 @@ import {
   ScanCompleteEvent,
 } from '@shared/types/Scan';
 import { SourceDescriptor, SourceType } from '@shared/types/Source';
+import { ScanCacheService } from './ScanCacheService';
 // CommonJS와 호환되도록 uuid 대신 crypto 사용
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
@@ -31,9 +32,11 @@ const CHUNK_DELAY_MS = 10;
 export class ArchiveService extends EventEmitter {
   private openArchives: Map<string, { archive: Archive; reader: ArchiveReader }> = new Map();
   private activeScans = new Map<string, AbortController>();
+  private scanCache: ScanCacheService;
 
-  constructor() {
+  constructor(scanCache?: ScanCacheService) {
     super();
+    this.scanCache = scanCache || new ScanCacheService();
   }
 
   /**
@@ -355,60 +358,100 @@ export class ArchiveService extends EventEmitter {
       throw new Error(`Archive file not found: ${filePath}`);
     }
 
-    // Detect format
-    const format = this.detectArchiveFormat(filePath);
-    if (!format) {
-      throw new Error('Unsupported archive format');
-    }
-
-    // Get reader
-    const reader = this.getReader(format);
-
-    // Open archive
-    try {
-      await reader.open(filePath, password);
-    } catch (error) {
-      throw new Error(`Failed to open archive: ${error}`);
-    }
-
-    const isPasswordProtected = await reader.isPasswordProtected();
-    const entries = await reader.listEntries();
-
-    // Filter for images
-    const imageEntries = entries.filter(
-      entry => !entry.isDirectory && isSupportedImageFormat(entry.path)
-    );
-
+    const stats = fs.statSync(filePath);
+    const mtime = Math.floor(stats.mtimeMs);
     const scanToken = randomUUID();
     const archiveId = randomUUID();
     const fileName = path.basename(filePath);
 
-    // Process only initial images
-    const initialEntries = imageEntries.slice(0, INITIAL_SCAN_LIMIT);
-    const initialImages: Image[] = initialEntries.map((entry, index) => {
-      const sanitizedPath = sanitizePath(entry.path);
-      return {
-        id: randomUUID(),
-        archiveId,
-        pathInArchive: sanitizedPath,
-        fileName: path.basename(sanitizedPath),
-        folderPath: getParentPath(sanitizedPath) || '/',
-        format: detectFormatFromExtension(entry.path),
-        fileSize: entry.compressedSize,
-        dimensions: undefined,
-        globalIndex: index,
-        folderIndex: 0,
-        isLoaded: false,
-        isCorrupted: false,
-      };
-    });
+    // Try to get cached scan result
+    const cachedImages = this.scanCache.getCachedScan(filePath, mtime);
 
-    const sortedInitialImages = naturalSortBy(initialImages, 'pathInArchive');
-    sortedInitialImages.forEach((img, idx) => {
-      img.globalIndex = idx;
-    });
+    let allImages: Image[];
+    let isFromCache = false;
+    let format: ArchiveFormat;
+    let isPasswordProtected = false;
+    let totalFileCount = 0;
+    let reader: ArchiveReader;
 
-    const rootFolder = this.buildFolderTree(sortedInitialImages, archiveId);
+    if (cachedImages && cachedImages.length > 0) {
+      // Cache hit - still need to open archive for extraction
+      format = this.detectArchiveFormat(filePath)!;
+      reader = this.getReader(format);
+
+      try {
+        await reader.open(filePath, password);
+        isPasswordProtected = await reader.isPasswordProtected();
+        const entries = await reader.listEntries();
+        totalFileCount = entries.length;
+      } catch (error) {
+        throw new Error(`Failed to open archive: ${error}`);
+      }
+
+      allImages = cachedImages.map(img => ({ ...img, archiveId }));
+      isFromCache = true;
+      console.log(`✅ Using cached scan for ${filePath}: ${allImages.length} images`);
+    } else {
+      // Cache miss - perform full scan
+      console.log(`❌ Cache miss for ${filePath}, performing full scan`);
+
+      // Detect format
+      format = this.detectArchiveFormat(filePath)!;
+      if (!format) {
+        throw new Error('Unsupported archive format');
+      }
+
+      // Get reader
+      reader = this.getReader(format);
+
+      // Open archive
+      try {
+        await reader.open(filePath, password);
+      } catch (error) {
+        throw new Error(`Failed to open archive: ${error}`);
+      }
+
+      isPasswordProtected = await reader.isPasswordProtected();
+      const entries = await reader.listEntries();
+      totalFileCount = entries.length;
+
+      // Filter for images
+      const imageEntries = entries.filter(
+        entry => !entry.isDirectory && isSupportedImageFormat(entry.path)
+      );
+
+      // Process all images
+      allImages = imageEntries.map((entry, index) => {
+        const sanitizedPath = sanitizePath(entry.path);
+        return {
+          id: randomUUID(),
+          archiveId,
+          pathInArchive: sanitizedPath,
+          fileName: path.basename(sanitizedPath),
+          folderPath: getParentPath(sanitizedPath) || '/',
+          format: detectFormatFromExtension(entry.path),
+          fileSize: entry.compressedSize,
+          dimensions: undefined,
+          globalIndex: index,
+          folderIndex: 0,
+          isLoaded: false,
+          isCorrupted: false,
+        };
+      });
+
+      allImages = naturalSortBy(allImages, 'pathInArchive');
+      allImages.forEach((img, idx) => {
+        img.globalIndex = idx;
+      });
+
+      // Save to cache asynchronously
+      setImmediate(() => {
+        this.scanCache.saveScan(filePath, mtime, allImages);
+      });
+    }
+
+    const initialImages = allImages.slice(0, INITIAL_SCAN_LIMIT);
+    const rootFolder = this.buildFolderTree(initialImages, archiveId);
 
     const source: SourceDescriptor = {
       id: archiveId,
@@ -423,10 +466,10 @@ export class ArchiveService extends EventEmitter {
       filePath,
       fileName,
       format,
-      fileSize: fs.statSync(filePath).size,
+      fileSize: stats.size,
       isPasswordProtected,
-      totalImageCount: imageEntries.length,
-      totalFileCount: entries.length,
+      totalImageCount: allImages.length,
+      totalFileCount,
       rootFolder,
       isOpen: true,
       openedAt: Date.now(),
@@ -436,24 +479,72 @@ export class ArchiveService extends EventEmitter {
     // Store in cache
     this.openArchives.set(archiveId, { archive, reader });
 
-    const isComplete = imageEntries.length <= INITIAL_SCAN_LIMIT;
+    const isComplete = isFromCache || allImages.length <= INITIAL_SCAN_LIMIT;
 
     if (!isComplete) {
-      // Start background processing
-      this.startBackgroundArchiveScan(imageEntries, scanToken, archiveId).catch(err => {
-        console.error('Background archive scan error:', err);
-        this.emit('scan-error', { token: scanToken, error: err.message });
-      });
+      // Start background processing for remaining images
+      this.emitRemainingImagesProgressively(allImages, scanToken, archiveId);
     }
 
     return {
       source,
-      initialImages: sortedInitialImages,
+      initialImages,
       rootFolder,
       scanToken,
-      estimatedTotal: imageEntries.length,
+      estimatedTotal: isFromCache ? allImages.length : allImages.length,
       isComplete,
     };
+  }
+
+  /**
+   * Emit remaining images progressively (when using cache)
+   */
+  private async emitRemainingImagesProgressively(
+    allImages: Image[],
+    token: string,
+    archiveId: string
+  ): Promise<void> {
+    const controller = new AbortController();
+    this.activeScans.set(token, controller);
+
+    const startTime = Date.now();
+    const remainingImages = allImages.slice(INITIAL_SCAN_LIMIT);
+
+    try {
+      for (let i = 0; i < remainingImages.length; i += CHUNK_SIZE) {
+        if (controller.signal.aborted) break;
+
+        const chunk = remainingImages.slice(i, i + CHUNK_SIZE);
+
+        // Emit progress
+        if (!controller.signal.aborted) {
+          const progressEvent: ScanProgressEvent = {
+            token,
+            discovered: allImages.length,
+            processed: INITIAL_SCAN_LIMIT + i + chunk.length,
+            currentPath: chunk[chunk.length - 1]?.pathInArchive || '',
+            imageChunk: chunk,
+          };
+          this.emit('scan-progress', progressEvent);
+        }
+
+        // Throttle
+        await new Promise(resolve => setTimeout(resolve, CHUNK_DELAY_MS));
+      }
+
+      // Emit complete
+      if (!controller.signal.aborted) {
+        const completeEvent: ScanCompleteEvent = {
+          token,
+          totalImages: allImages.length,
+          totalFolders: 1,
+          duration: Date.now() - startTime,
+        };
+        this.emit('scan-complete', completeEvent);
+      }
+    } finally {
+      this.activeScans.delete(token);
+    }
   }
 
   /**

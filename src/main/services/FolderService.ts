@@ -13,6 +13,7 @@ import {
 import { detectFormatFromExtension, isSupportedImageFormat } from '@lib/image-utils';
 import { getParentPath, sanitizePath, splitPath } from '@lib/file-utils';
 import { naturalSortBy } from '@lib/natural-sort';
+import { ScanCacheService } from './ScanCacheService';
 
 export interface FolderOpenResult {
   source: SourceDescriptor;
@@ -27,9 +28,11 @@ const CHUNK_DELAY_MS = 10;
 export class FolderService extends EventEmitter {
   private openFolders = new Map<string, { source: SourceDescriptor; rootFolder: FolderNode; basePath: string }>();
   private activeScans = new Map<string, AbortController>();
+  private scanCache: ScanCacheService;
 
-  constructor() {
+  constructor(scanCache?: ScanCacheService) {
     super();
+    this.scanCache = scanCache || new ScanCacheService();
   }
 
   async openFolder(folderPath: string): Promise<FolderOpenResult> {
@@ -232,15 +235,34 @@ export class FolderService extends EventEmitter {
 
     const scanToken = randomUUID();
     const sourceId = randomUUID();
+    const mtime = Math.floor(stats.mtimeMs);
 
-    // Scan only root level initially
-    const initialImages = await this.scanSingleLevel(folderPath, folderPath);
+    // Try to get cached scan result
+    const cachedImages = this.scanCache.getCachedScan(folderPath, mtime);
 
-    // Assign archiveId
-    initialImages.forEach(img => {
-      img.archiveId = sourceId;
-    });
+    let allImages: Image[];
+    let isFromCache = false;
 
+    if (cachedImages && cachedImages.length > 0) {
+      // Cache hit - use cached images
+      allImages = cachedImages.map(img => ({ ...img, archiveId: sourceId }));
+      isFromCache = true;
+      console.log(`✅ Using cached scan for ${folderPath}: ${allImages.length} images`);
+    } else {
+      // Cache miss - perform full scan
+      console.log(`❌ Cache miss for ${folderPath}, performing full scan`);
+      allImages = await this.scanFolder(folderPath);
+      allImages.forEach(img => {
+        img.archiveId = sourceId;
+      });
+
+      // Save to cache asynchronously (don't block return)
+      setImmediate(() => {
+        this.scanCache.saveScan(folderPath, mtime, allImages);
+      });
+    }
+
+    const initialImages = allImages.slice(0, INITIAL_SCAN_LIMIT);
     const rootFolder = this.buildFolderTree(initialImages, sourceId);
 
     const source: SourceDescriptor = {
@@ -256,26 +278,72 @@ export class FolderService extends EventEmitter {
       basePath: folderPath,
     });
 
-    // Determine if complete
-    const isSmall = initialImages.length < INITIAL_SCAN_LIMIT;
-    const isComplete = isSmall && !(await this.hasSubdirectories(folderPath));
+    const isComplete = isFromCache || allImages.length <= INITIAL_SCAN_LIMIT;
 
     if (!isComplete) {
-      // Start background scan
-      this.startBackgroundScan(folderPath, scanToken, sourceId).catch(err => {
-        console.error('Background scan error:', err);
-        this.emit('scan-error', { token: scanToken, error: err.message });
-      });
+      // Start background scan for remaining images
+      this.emitRemainingImagesProgressively(allImages, scanToken, sourceId);
     }
 
     return {
       source,
-      initialImages: initialImages.slice(0, INITIAL_SCAN_LIMIT),
+      initialImages,
       rootFolder,
       scanToken,
-      estimatedTotal: isComplete ? initialImages.length : undefined,
+      estimatedTotal: isFromCache ? allImages.length : undefined,
       isComplete,
     };
+  }
+
+  /**
+   * Emit remaining images progressively (when using cache)
+   */
+  private async emitRemainingImagesProgressively(
+    allImages: Image[],
+    token: string,
+    sourceId: string
+  ): Promise<void> {
+    const controller = new AbortController();
+    this.activeScans.set(token, controller);
+
+    const startTime = Date.now();
+    const remainingImages = allImages.slice(INITIAL_SCAN_LIMIT);
+
+    try {
+      for (let i = 0; i < remainingImages.length; i += CHUNK_SIZE) {
+        if (controller.signal.aborted) break;
+
+        const chunk = remainingImages.slice(i, i + CHUNK_SIZE);
+
+        // Emit progress
+        if (!controller.signal.aborted) {
+          const progressEvent: ScanProgressEvent = {
+            token,
+            discovered: allImages.length,
+            processed: INITIAL_SCAN_LIMIT + i + chunk.length,
+            currentPath: '',
+            imageChunk: chunk,
+          };
+          this.emit('scan-progress', progressEvent);
+        }
+
+        // Throttle
+        await new Promise(resolve => setTimeout(resolve, CHUNK_DELAY_MS));
+      }
+
+      // Emit complete
+      if (!controller.signal.aborted) {
+        const completeEvent: ScanCompleteEvent = {
+          token,
+          totalImages: allImages.length,
+          totalFolders: 1,
+          duration: Date.now() - startTime,
+        };
+        this.emit('scan-complete', completeEvent);
+      }
+    } finally {
+      this.activeScans.delete(token);
+    }
   }
 
   /**
