@@ -8,9 +8,11 @@
 ## 작업 항목
 
 ### 1. 데이터 모델/저장소
-- [ ] Playlist 스키마 정의 (`id`, `name`, `description`, `entries[]` 등)
-- [ ] `entries[]`는 `{ sourcePath, sourceType, label }`만 담아 폴더/아카이브를 식별
-- [ ] 로컬 DB 또는 JSON 파일에 저장/불러오기 로직 구현
+- [ ] SQLite 기반 `playlists`, `playlist_entries` 테이블 설계 및 마이그레이션 추가<br>
+      예) `playlists(id TEXT PRIMARY KEY, name TEXT, description TEXT, created_at, updated_at)`<br>
+      `playlist_entries(playlist_id TEXT, position INTEGER, source_path TEXT, source_type TEXT, label TEXT, PRIMARY KEY(playlist_id, position))`
+- [ ] Repository/IPC 레이어에서 playlists/entries CRUD, 순서 변경, 삭제 API 구현
+- [ ] Playlist 관리 UI에서 CRUD 작업 시 DB와 동기화하여 재시작 후에도 유지
 
 ### 2. IPC & 드래그 앤 드롭 입력 처리
 - [ ] Finder 등 외부 앱에서 드래그한 파일을 받기 위해 `document` 단위의 `dragover/drop` 핸들러를 등록하고, `File.path`를 활용해 폴더/압축파일 경로 수집
@@ -38,6 +40,12 @@
 - [ ] Playlist entry가 더 이상 존재하지 않는 경로일 때 사용자에게 안내 및 제거 옵션 제공
 - [ ] 폴더/압축파일 마운트 해제 등으로 열리지 않을 경우 graceful fallback
 - [ ] Playlist 패널이 열린 상태에서 앱 닫힐 때, 마지막 상태 자동 저장
+
+### 7. 상태/정책/테스트 보완
+- [ ] Store에 `activePlaylistId`, `isPlaylistPlaying` 등을 추가해 플레이리스트 모드 상태를 명확히 관리
+- [ ] 리스트 끝에서 자동 재생 시 멈출지, 루프할지 등의 UX 정책을 정의하고 사용자 설정 제공
+- [ ] 드래그로 추가된 경로가 삭제/이동된 경우 사용자에게 안내하고 entry를 정리하는 오류 처리 추가
+- [ ] Finder/Sidebar/Recent → Playlist 드롭, 순서 변경, 삭제, 앱 재시작 시 데이터 유지 등 QA 체크리스트 작성
 
 ## 검증 포인트
 - Finder에서 끌어온 폴더/압축파일이 즉시 리스트에 추가되고, 클릭 시 해당 소스로 이동하는지 확인
