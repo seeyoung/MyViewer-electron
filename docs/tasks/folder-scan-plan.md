@@ -9,11 +9,17 @@
 - 폴더(FolderService)만 대상으로 초기 구현
 - 단순 Promise 기반 비동기 청크 처리
 - 기본적인 진행률 UI
+  - 영향 모듈: `FolderService`, `folder:open` IPC, `useArchive`, `FolderSidebar`, `BottomThumbnails`
 
 ### Phase 2 - 아카이브 추가, 캐싱 도입
 - ArchiveService도 동일한 지연 로딩 전략 적용
 - 폴더 스캔 결과 캐싱 (mtime 기반)
 - 고급 에러 처리
+  - 영향 모듈: `ArchiveService`, `archive:open` IPC, 캐시 저장소(JSON/SQLite)
+- 캐시 설계 추가 사항:
+  - [ ] 캐시 키: `(sourcePath, mtime)` 조합으로 식별
+  - [ ] 저장 위치: 사용자 데이터 디렉터리 내 JSON 혹은 SQLite 테이블(`scan_cache`)
+  - [ ] 만료 정책: mtime 변경 시 무효화, 용량 초과 시 LRU 방식으로 정리
 
 ### Phase 3 - 고급 최적화
 - Worker Threads 활용
@@ -327,3 +333,4 @@ const SCAN_LIMITS = {
 **마지막 업데이트:** 2025-11-14
 **작성자:** Claude (AI Assistant)
 **버전:** 2.0 (상세 명세 추가)
+- [ ] 영향받는 렌더러 모듈 리스트 업데이트 (`useArchive`, `FolderSidebar`, `BottomThumbnails`, `viewerStore` 등)
