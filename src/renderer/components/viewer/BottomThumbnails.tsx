@@ -4,7 +4,8 @@ import { Image as ViewerImage } from '@shared/types/Image';
 import * as channels from '@shared/constants/ipc-channels';
 import { SourceType } from '@shared/types/Source';
 import { useInViewport } from '../../hooks/useInViewport';
-import { runThumbnailTask } from '../../utils/thumbnailRequestQueue';
+import { runThumbnailTask, Priority } from '../../utils/thumbnailRequestQueue';
+import { PLACEHOLDER_LOADING, PLACEHOLDER_ERROR } from '../../constants/placeholders';
 
 const MAX_THUMBNAILS = 300;
 const PANEL_HEIGHT = 150;
@@ -70,17 +71,22 @@ const BottomThumbnails: React.FC = () => {
     const maxWidth = Math.round(safeHeight * (4 / 3));
     const upcoming = thumbnailImages.filter(({ index }) => index > currentPageIndex && index <= currentPageIndex + 8);
 
-    upcoming.forEach(({ img }) => {
-      runThumbnailTask(() =>
-        window.electronAPI
-          .invoke(channels.IMAGE_GET_THUMBNAIL, {
-            archiveId: img.archiveId,
-            image: img,
-            sourceType: currentSource.type ?? SourceType.ARCHIVE,
-            maxHeight: safeHeight,
-            maxWidth: Math.max(maxWidth, 48),
-          })
-          .catch(() => undefined)
+    upcoming.forEach(({ img, index }) => {
+      const distance = Math.abs(index - currentPageIndex);
+      const priority = distance <= 2 ? Priority.PREFETCH_NEAR : Priority.PREFETCH_FAR;
+
+      runThumbnailTask(
+        () =>
+          window.electronAPI
+            .invoke(channels.IMAGE_GET_THUMBNAIL, {
+              archiveId: img.archiveId,
+              image: img,
+              sourceType: currentSource.type ?? SourceType.ARCHIVE,
+              maxHeight: safeHeight,
+              maxWidth: Math.max(maxWidth, 48),
+            })
+            .catch(() => undefined),
+        priority
       );
     });
   }, [currentSource, thumbnailImages, currentPageIndex, cardHeight]);
@@ -96,6 +102,7 @@ const BottomThumbnails: React.FC = () => {
             isActive={index === currentPageIndex}
             onSelect={() => navigateToPage(index)}
             panelHeight={cardHeight}
+            distanceFromCurrent={Math.abs(index - currentPageIndex)}
           />
         ))}
       </div>
@@ -134,16 +141,28 @@ interface ThumbnailCardProps {
   onSelect: () => void;
   isActive: boolean;
   panelHeight: number;
+  distanceFromCurrent: number;
 }
 
-type ThumbnailPayload = {
+interface ThumbnailState {
   dataUrl: string;
+  status: 'loading' | 'success' | 'error';
   width?: number;
   height?: number;
-};
+}
 
-const ThumbnailCard: React.FC<ThumbnailCardProps> = ({ image, sourceType, onSelect, isActive, panelHeight }) => {
-  const [thumbnail, setThumbnail] = useState<ThumbnailPayload | null>(null);
+const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
+  image,
+  sourceType,
+  onSelect,
+  isActive,
+  panelHeight,
+  distanceFromCurrent,
+}) => {
+  const [thumbnail, setThumbnail] = useState<ThumbnailState>({
+    dataUrl: PLACEHOLDER_LOADING,
+    status: 'loading',
+  });
   const [orientation, setOrientation] = useState<'landscape' | 'portrait'>(() => {
     if (image.dimensions) {
       return image.dimensions.height > image.dimensions.width ? 'portrait' : 'landscape';
@@ -152,6 +171,16 @@ const ThumbnailCard: React.FC<ThumbnailCardProps> = ({ image, sourceType, onSele
   });
   const cardRef = useRef<HTMLButtonElement | null>(null);
   const isVisible = useInViewport(cardRef, { rootMargin: '96px 0px', threshold: 0, freezeOnceVisible: true });
+  const retryCountRef = useRef(0);
+  const maxRetries = 2;
+
+  // Calculate priority based on distance from current page
+  const getPriority = (): number => {
+    if (isActive) return Priority.CURRENT_VIEW;
+    if (distanceFromCurrent <= 2) return Priority.PREFETCH_NEAR;
+    if (distanceFromCurrent <= 8) return Priority.PREFETCH_FAR;
+    return Priority.BACKGROUND;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -159,64 +188,76 @@ const ThumbnailCard: React.FC<ThumbnailCardProps> = ({ image, sourceType, onSele
       return undefined;
     }
 
-    const loadFallback = async () => {
-      try {
-        const result: any = await runThumbnailTask(() =>
-          window.electronAPI.invoke(channels.IMAGE_LOAD, {
-            archiveId: image.archiveId,
-            imagePath: image.pathInArchive,
-            encoding: 'base64',
-            sourceType,
-          }) as Promise<any>
-        );
-
-        if (!cancelled && result?.data && result?.format) {
-          setThumbnail({ dataUrl: `data:image/${result.format};base64,${result.data}` });
-        }
-      } catch (fallbackError) {
-        console.error('Fallback thumbnail load failed', fallbackError);
-      }
-    };
-
     const load = async () => {
-      setThumbnail(null);
+      setThumbnail({ dataUrl: PLACEHOLDER_LOADING, status: 'loading' });
+
       try {
         const safeHeight = Math.max(panelHeight, 48);
         const maxWidth = Math.round(safeHeight * (4 / 3));
-        const response: any = await runThumbnailTask(() =>
-          window.electronAPI.invoke(channels.IMAGE_GET_THUMBNAIL, {
-            archiveId: image.archiveId,
-            image,
-            sourceType,
-            maxHeight: safeHeight,
-            maxWidth: Math.max(maxWidth, 48),
-          }) as Promise<any>
+
+        const response: any = await runThumbnailTask(
+          () =>
+            window.electronAPI.invoke(channels.IMAGE_GET_THUMBNAIL, {
+              archiveId: image.archiveId,
+              image,
+              sourceType,
+              maxHeight: safeHeight,
+              maxWidth: Math.max(maxWidth, 48),
+            }) as Promise<any>,
+          getPriority() // Pass priority to queue
         );
+
         if (!cancelled && response?.dataUrl) {
           const width = typeof response.width === 'number' ? response.width : undefined;
           const height = typeof response.height === 'number' ? response.height : undefined;
+
           setThumbnail({
             dataUrl: response.dataUrl as string,
+            status: 'success',
             width,
             height,
           });
+
           if (typeof height === 'number' && typeof width === 'number') {
             setOrientation(height > width ? 'portrait' : 'landscape');
           }
+
+          retryCountRef.current = 0; // Reset retry count on success
           return;
         }
       } catch (error) {
-        console.error('Failed to load bottom thumbnail', error);
+        console.error('Failed to load thumbnail:', error);
+
+        // Retry logic with exponential backoff
+        if (retryCountRef.current < maxRetries) {
+          retryCountRef.current++;
+          console.log(`Retrying thumbnail load (${retryCountRef.current}/${maxRetries})...`);
+
+          // Exponential backoff: 1s, 2s
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCountRef.current));
+
+          if (!cancelled) {
+            load(); // Recursive retry
+          }
+          return;
+        }
       }
 
-      await loadFallback();
+      // Final failure - show error placeholder
+      if (!cancelled) {
+        setThumbnail({
+          dataUrl: PLACEHOLDER_ERROR,
+          status: 'error',
+        });
+      }
     };
 
     load();
+
     return () => {
       cancelled = true;
     };
-  }, [image.id, image.pathInArchive, image.fileSize, sourceType, panelHeight, isVisible]);
+  }, [image.id, image.pathInArchive, image.fileSize, sourceType, panelHeight, isVisible, isActive, distanceFromCurrent]);
 
   useEffect(() => {
     if (image.dimensions) {
@@ -226,17 +267,28 @@ const ThumbnailCard: React.FC<ThumbnailCardProps> = ({ image, sourceType, onSele
 
   return (
     <button
-      className={`thumbnail-card ${orientation} ${isActive ? 'active' : ''}`}
+      className={`thumbnail-card ${orientation} ${isActive ? 'active' : ''} ${thumbnail.status}`}
       style={{ height: `${panelHeight}px` }}
       onClick={onSelect}
-      title={image.pathInArchive}
+      title={
+        thumbnail.status === 'error'
+          ? `Failed to load: ${image.pathInArchive}`
+          : image.pathInArchive
+      }
       ref={cardRef}
     >
-      {thumbnail ? (
-        <img src={thumbnail.dataUrl} alt={image.fileName} loading="lazy" draggable={false} />
-      ) : (
-        <span>Loading…</span>
+      <img
+        src={thumbnail.dataUrl}
+        alt={image.fileName}
+        loading="lazy"
+        draggable={false}
+        className={thumbnail.status}
+      />
+
+      {thumbnail.status === 'error' && (
+        <span className="error-badge" title="Failed to load thumbnail">⚠️</span>
       )}
+
       <style>{`
         .thumbnail-card {
           flex: 0 0 auto;
@@ -252,6 +304,7 @@ const ThumbnailCard: React.FC<ThumbnailCardProps> = ({ image, sourceType, onSele
           align-items: center;
           cursor: pointer;
           transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+          position: relative;
         }
         .thumbnail-card.portrait {
           aspect-ratio: 3 / 4;
@@ -265,14 +318,43 @@ const ThumbnailCard: React.FC<ThumbnailCardProps> = ({ image, sourceType, onSele
           border-color: #1484ff;
           transform: translateY(-2px);
         }
+        .thumbnail-card.error {
+          border-color: #ff4444;
+          background: #2a1a1a;
+        }
         .thumbnail-card img {
           width: 100%;
           height: 100%;
           object-fit: cover;
           background: #111;
         }
+        .thumbnail-card img.loading {
+          opacity: 0.5;
+          animation: pulse 1.5s ease-in-out infinite;
+        }
+        .thumbnail-card img.error {
+          opacity: 0.3;
+          filter: grayscale(100%);
+        }
         .thumbnail-card.portrait img {
           object-fit: contain;
+        }
+        .error-badge {
+          position: absolute;
+          top: 4px;
+          right: 4px;
+          background: rgba(255, 68, 68, 0.9);
+          border-radius: 50%;
+          width: 20px;
+          height: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 0.5; }
+          50% { opacity: 0.8; }
         }
       `}</style>
     </button>
