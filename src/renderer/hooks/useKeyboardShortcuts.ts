@@ -9,6 +9,10 @@ export function useKeyboardShortcuts() {
   const setZoomLevel = useViewerStore(state => state.setZoomLevel);
   const setFitMode = useViewerStore(state => state.setFitMode);
   const isFullscreen = useViewerStore(state => state.isFullscreen);
+  const autoSlideEnabled = useViewerStore(state => state.autoSlideEnabled);
+  const autoSlideInterval = useViewerStore(state => state.autoSlideInterval);
+  const setAutoSlideInterval = useViewerStore(state => state.setAutoSlideInterval);
+  const showAutoSlideOverlay = useViewerStore(state => state.showAutoSlideOverlay);
 
   useEffect(() => {
     console.log('⌨️  Initializing keyboard shortcuts...');
@@ -57,6 +61,24 @@ export function useKeyboardShortcuts() {
         case 'PageUp':
           event.preventDefault();
           goToPrevious();
+          break;
+
+        case 'ArrowUp':
+          if (autoSlideEnabled) {
+            event.preventDefault();
+            const nextInterval = Math.min(20000, autoSlideInterval + 1000);
+            setAutoSlideInterval(nextInterval);
+            showAutoSlideOverlay(nextInterval);
+          }
+          break;
+
+        case 'ArrowDown':
+          if (autoSlideEnabled) {
+            event.preventDefault();
+            const nextInterval = Math.max(1000, autoSlideInterval - 1000);
+            setAutoSlideInterval(nextInterval);
+            showAutoSlideOverlay(nextInterval);
+          }
           break;
 
         case 'Home':
@@ -183,5 +205,9 @@ export function useKeyboardShortcuts() {
     setZoomLevel,
     setFitMode,
     isFullscreen,
+    autoSlideEnabled,
+    autoSlideInterval,
+    setAutoSlideInterval,
+    showAutoSlideOverlay,
   ]);
 }

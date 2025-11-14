@@ -23,6 +23,8 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
   const autoSlideInterval = useViewerStore(state => state.autoSlideInterval);
   const setAutoSlideEnabled = useViewerStore(state => state.setAutoSlideEnabled);
   const setAutoSlideInterval = useViewerStore(state => state.setAutoSlideInterval);
+  const autoSlideOverlay = useViewerStore(state => state.autoSlideIntervalOverlay);
+  const showAutoSlideOverlay = useViewerStore(state => state.showAutoSlideOverlay);
 
   const totalPages = images.length;
   const currentPage = currentPageIndex + 1; // Display 1-based index
@@ -71,7 +73,9 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
   };
 
   const handleAutoSlideIntervalChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    setAutoSlideInterval(Number(event.target.value));
+    const value = Number(event.target.value);
+    setAutoSlideInterval(value);
+    showAutoSlideOverlay(value);
   };
 
   if (!currentSource) {
@@ -82,6 +86,11 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
 
   return (
     <div className={navigationClasses}>
+      {autoSlideOverlay.visible && (
+        <div className="autoslide-overlay">
+          Auto Slide: {(autoSlideOverlay.value / 1000).toFixed(0)}s
+        </div>
+      )}
       <div className="navigation-info">
         <span className="source-badge">{currentSource.type === SourceType.FOLDER ? 'Folder' : 'Archive'}</span>
         <span className="archive-name">{currentSource.label}</span>
@@ -211,6 +220,7 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
           padding: 0.75rem 1rem;
           background-color: #2d2d2d;
           border-bottom: 1px solid #3d3d3d;
+          position: relative;
         }
 
         .navigation-info {
@@ -360,6 +370,18 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
           border: 1px solid #555;
           border-radius: 4px;
           padding: 0.2rem 0.4rem;
+        }
+
+        .autoslide-overlay {
+          position: absolute;
+          top: -1.75rem;
+          right: 1rem;
+          background: rgba(0, 0, 0, 0.8);
+          color: #fff;
+          padding: 0.2rem 0.6rem;
+          border-radius: 4px;
+          font-size: 0.75rem;
+          box-shadow: 0 0 6px rgba(0,0,0,0.4);
         }
 
         .fullscreen-button {

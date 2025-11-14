@@ -39,6 +39,7 @@ interface ViewerState {
   showBookmarks: boolean;
   autoSlideEnabled: boolean;
   autoSlideInterval: number;
+  autoSlideIntervalOverlay: { visible: boolean; value: number };
 
   // Filter/search
   activeFolderId: string | null;
@@ -72,6 +73,7 @@ interface ViewerState {
   setThumbnailPosition: (position: 'sidebar' | 'bottom') => void;
   setAutoSlideEnabled: (enabled: boolean) => void;
   setAutoSlideInterval: (interval: number) => void;
+  showAutoSlideOverlay: (value: number) => void;
   reset: () => void;
 }
 
@@ -105,6 +107,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   showBookmarks: false,
   autoSlideEnabled: false,
   autoSlideInterval: 5000,
+  autoSlideIntervalOverlay: { visible: false, value: 5000 },
 
   activeFolderId: null,
   searchQuery: '',
@@ -171,6 +174,13 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
 
   setAutoSlideInterval: (interval) => set({ autoSlideInterval: Math.max(1000, interval) }),
 
+  showAutoSlideOverlay: (value) => {
+    set({ autoSlideIntervalOverlay: { visible: true, value } });
+    setTimeout(() => {
+      set((state) => ({ autoSlideIntervalOverlay: { ...state.autoSlideIntervalOverlay, visible: false } }));
+    }, 1000);
+  },
+
   reset: () =>
     set({
       currentSource: null,
@@ -190,6 +200,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       thumbnailPosition: 'sidebar',
       autoSlideEnabled: false,
       autoSlideInterval: 5000,
+      autoSlideIntervalOverlay: { visible: false, value: 5000 },
       activeFolderId: null,
       searchQuery: '',
       bookmarks: [],
