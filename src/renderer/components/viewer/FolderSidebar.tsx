@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useViewerStore } from '../../store/viewerStore';
 import { useImageNavigation } from '../../hooks/useImageNavigation';
 import { Image as ViewerImage } from '@shared/types/Image';
 import { SourceDescriptor, SourceType } from '@shared/types/Source';
-import { useInViewportShared } from '../../hooks/useInViewport';
-import { runThumbnailTask, Priority } from '../../utils/thumbnailRequestQueue';
-import { PLACEHOLDER_LOADING, PLACEHOLDER_ERROR } from '../../constants/placeholders';
+import { Priority } from '../../utils/thumbnailRequestQueue';
+import { useThumbnailLoader } from '../../hooks/useThumbnailLoader';
+import { useAutoCenter } from '../../hooks/useAutoCenter';
 
 interface FolderNodeView {
   path: string;
@@ -126,6 +126,7 @@ const FolderSidebar: React.FC = () => {
           source={currentSource}
           onSelect={(index) => navigateToPage(index)}
           width={sidebarWidth}
+          activeIndex={currentPageIndex}
         />
       )}
       <style>{`
@@ -203,6 +204,10 @@ const FolderSidebar: React.FC = () => {
         .thumbnail-item:hover {
           transform: scale(1.05);
         }
+        .thumbnail-item.active {
+          border: 2px solid #2da8ff;
+          box-shadow: 0 0 10px rgba(45, 168, 255, 0.35);
+        }
         .thumbnail-item.error {
           background: #2a1a1a;
           border: 1px solid #ff4444;
@@ -213,6 +218,9 @@ const FolderSidebar: React.FC = () => {
           object-fit: cover;
           object-position: center;
           display: block;
+        }
+        .thumbnail-item.portrait img {
+          object-fit: contain;
         }
         .thumbnail-item img.loading {
           opacity: 0.5;
@@ -249,10 +257,10 @@ interface ThumbnailGridProps {
   source: SourceDescriptor | null;
   onSelect: (index: number) => void;
   width: number;
+  activeIndex: number;
 }
 
-const ThumbnailGrid: React.FC<ThumbnailGridProps> = ({ images, source, onSelect, width }) => {
-  const currentPageIndex = useViewerStore((state) => state.currentPageIndex);
+const ThumbnailGrid: React.FC<ThumbnailGridProps> = ({ images, source, onSelect, width, activeIndex }) => {
   const targetWidth = Math.max(120, width - 60);
   const columnWidth = Math.min(320, targetWidth);
   const cellHeight = Math.round(columnWidth * 0.75);
@@ -270,7 +278,7 @@ const ThumbnailGrid: React.FC<ThumbnailGridProps> = ({ images, source, onSelect,
           source={source}
           onSelect={() => onSelect(index)}
           height={cellHeight}
-          isActive={index === currentPageIndex}
+          isActive={index === activeIndex}
         />
       ))}
     </div>
@@ -285,116 +293,27 @@ interface ThumbnailItemProps {
   isActive: boolean;
 }
 
-interface ThumbnailState {
-  dataUrl: string;
-  status: 'loading' | 'success' | 'error';
-}
-
 const ThumbnailItem: React.FC<ThumbnailItemProps> = ({ image, source, onSelect, height, isActive }) => {
-  const [thumbnail, setThumbnail] = useState<ThumbnailState>({
-    dataUrl: PLACEHOLDER_LOADING,
-    status: 'loading',
+  const priorityResolver = useCallback(() => (isActive ? Priority.CURRENT_VIEW : Priority.PREFETCH_NEAR), [isActive]);
+
+  const { thumbnail, orientation, cardRef } = useThumbnailLoader({
+    image,
+    sourceType: source?.type ?? SourceType.ARCHIVE,
+    maxHeight: height,
+    maxWidth: height * (4 / 3),
+    priorityResolver,
+    rootMargin: '64px 0px',
   });
-  const itemRef = useRef<HTMLButtonElement | null>(null);
-  const isVisible = useInViewportShared(itemRef, { rootMargin: '64px 0px', threshold: 0, freezeOnceVisible: true });
-  const retryCountRef = useRef(0);
-  const hasLoadedRef = useRef(false);
-  const gridRef = useRef<HTMLButtonElement | null>(null);
-  const maxRetries = 2;
 
-  useEffect(() => {
-    let cancelled = false;
-    if (!isVisible || hasLoadedRef.current) {
-      return undefined;
-    }
-
-    const load = async () => {
-      setThumbnail({ dataUrl: PLACEHOLDER_LOADING, status: 'loading' });
-
-      try {
-        const response: any = await runThumbnailTask(
-          () =>
-            window.electronAPI.invoke('image:get-thumbnail', {
-              archiveId: image.archiveId,
-              image,
-              sourceType: source?.type ?? SourceType.ARCHIVE,
-            }) as Promise<any>,
-          Priority.PREFETCH_NEAR // Sidebar thumbnails get near priority
-        );
-
-        if (!cancelled && response?.dataUrl) {
-          setThumbnail({
-            dataUrl: response.dataUrl as string,
-            status: 'success',
-          });
-          hasLoadedRef.current = true;
-          retryCountRef.current = 0;
-          return;
-        }
-      } catch (error) {
-        console.error('Failed to load thumbnail:', error);
-
-        // Retry logic with exponential backoff
-        if (retryCountRef.current < maxRetries) {
-          retryCountRef.current++;
-          console.log(`Retrying thumbnail load (${retryCountRef.current}/${maxRetries})...`);
-
-          await new Promise(resolve => setTimeout(resolve, 1000 * retryCountRef.current));
-
-          if (!cancelled) {
-            load();
-          }
-          return;
-        }
-      }
-
-      // Final failure - show error placeholder
-      if (!cancelled) {
-        setThumbnail({
-          dataUrl: PLACEHOLDER_ERROR,
-          status: 'error',
-        });
-      }
-    };
-
-    load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [image.archiveId, image, isVisible, source?.type]);
-
-  useEffect(() => {
-    hasLoadedRef.current = false;
-    retryCountRef.current = 0;
-    setThumbnail({ dataUrl: PLACEHOLDER_LOADING, status: 'loading' });
-  }, [image.id]);
-
-  useEffect(() => {
-    if (!thumbnail || thumbnail.status !== 'success' || !itemRef.current) {
-      return;
-    }
-
-    const container = itemRef.current.parentElement as HTMLElement | null;
-    if (!container) {
-      return;
-    }
-
-    const containerHeight = container.clientHeight;
-    const cardHeight = itemRef.current.clientHeight;
-    const targetTop = itemRef.current.offsetTop - (containerHeight / 2 - cardHeight / 2);
-    const clampedTop = Math.max(0, Math.min(targetTop, container.scrollHeight - containerHeight));
-
-    container.scrollTo({ top: clampedTop, behavior: 'smooth' });
-  }, [thumbnail?.status]);
+  useAutoCenter(cardRef, { axis: 'vertical', isActive });
 
   return (
     <button
-      className={`thumbnail-item ${thumbnail.status} ${isActive ? 'active' : ''}`}
+      className={`thumbnail-item ${thumbnail.status} ${orientation} ${isActive ? 'active' : ''}`}
       onClick={onSelect}
       title={thumbnail.status === 'error' ? `Failed to load: ${image.pathInArchive}` : image.pathInArchive}
       style={{ height }}
-      ref={itemRef}
+      ref={cardRef}
     >
       <img
         src={thumbnail.dataUrl}

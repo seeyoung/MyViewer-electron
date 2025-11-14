@@ -73,7 +73,7 @@ function getSharedObserver(options: UseInViewportOptions): IntersectionObserver 
       (entries) => {
         entries.forEach((entry) => {
           const callback = observerCallbacks.get(entry.target);
-          callback?.([entry]);
+          callback?.([entry], observer!);
         });
       },
       {

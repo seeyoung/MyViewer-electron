@@ -139,11 +139,40 @@ export function useKeyboardShortcuts() {
     };
 
     console.log('👂 Adding keyboard event listener to document...');
+    const handleMouseButton = (event: MouseEvent) => {
+      if (event.button === 3) {
+        event.preventDefault();
+        goToPrevious();
+      } else if (event.button === 4) {
+        event.preventDefault();
+        goToNext();
+      }
+    };
+
+    const handleDoubleClick = (event: MouseEvent) => {
+      const targetElement = event.target as HTMLElement | null;
+      // 입력 필드에서 발생한 더블클릭은 무시
+      if (
+        targetElement instanceof HTMLInputElement ||
+        targetElement instanceof HTMLTextAreaElement ||
+        targetElement?.isContentEditable
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      window.electronAPI.send('window-toggle-fullscreen');
+    };
+
     document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mouseup', handleMouseButton);
+    document.addEventListener('dblclick', handleDoubleClick);
 
     return () => {
       console.log('🔇 Removing keyboard event listener...');
       document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mouseup', handleMouseButton);
+      document.removeEventListener('dblclick', handleDoubleClick);
     };
   }, [
     goToNext,

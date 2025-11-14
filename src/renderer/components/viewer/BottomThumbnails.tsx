@@ -1,17 +1,18 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useViewerStore } from '../../store/viewerStore';
 import { Image as ViewerImage } from '@shared/types/Image';
 import * as channels from '@shared/constants/ipc-channels';
 import { SourceType } from '@shared/types/Source';
-import { useInViewportShared } from '../../hooks/useInViewport';
-import { runThumbnailTask, Priority, updateThumbnailConcurrency } from '../../utils/thumbnailRequestQueue';
-import { PLACEHOLDER_LOADING, PLACEHOLDER_ERROR } from '../../constants/placeholders';
+import { Priority, updateThumbnailConcurrency, runThumbnailTask } from '../../utils/thumbnailRequestQueue';
+import { useThumbnailLoader } from '../../hooks/useThumbnailLoader';
+import { useAutoCenter } from '../../hooks/useAutoCenter';
 
 const MAX_THUMBNAILS = 300;
 const PANEL_HEIGHT = 150;
 
 const BottomThumbnails: React.FC = () => {
   const images = useViewerStore((state) => state.images);
+  const activeFolderId = useViewerStore(state => state.activeFolderId);
   const currentSource = useViewerStore((state) => state.currentSource);
   const navigateToPage = useViewerStore((state) => state.navigateToPage);
   const currentPageIndex = useViewerStore((state) => state.currentPageIndex);
@@ -58,10 +59,17 @@ const BottomThumbnails: React.FC = () => {
 
   const cardHeight = Math.max(panelHeight - 16, 48);
 
-  const thumbnailImages = useMemo(
-    () => images.map((img, index) => ({ img, index })).slice(0, MAX_THUMBNAILS),
-    [images]
-  );
+  const thumbnailImages = useMemo(() => {
+    const normalizedFolder = activeFolderId || '/';
+    return images
+      .map((img, index) => ({ img, index }))
+      .filter(({ img }) => {
+        const folderPath = img.folderPath || '/';
+        const normalized = folderPath.startsWith('/') ? folderPath : `/${folderPath}`;
+        return normalized === normalizedFolder;
+      })
+      .slice(0, MAX_THUMBNAILS);
+  }, [images, activeFolderId]);
 
   // Dynamic concurrency adjustment based on scroll activity
   useEffect(() => {
@@ -186,13 +194,6 @@ interface ThumbnailCardProps {
   distanceFromCurrent: number;
 }
 
-interface ThumbnailState {
-  dataUrl: string;
-  status: 'loading' | 'success' | 'error';
-  width?: number;
-  height?: number;
-}
-
 const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
   image,
   sourceType,
@@ -201,137 +202,26 @@ const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
   panelHeight,
   distanceFromCurrent,
 }) => {
-  const [thumbnail, setThumbnail] = useState<ThumbnailState>({
-    dataUrl: PLACEHOLDER_LOADING,
-    status: 'loading',
-  });
-  const [orientation, setOrientation] = useState<'landscape' | 'portrait'>(() => {
-    if (image.dimensions) {
-      return image.dimensions.height > image.dimensions.width ? 'portrait' : 'landscape';
-    }
-    return 'landscape';
-  });
-  const cardRef = useRef<HTMLButtonElement | null>(null);
-  const isVisible = useInViewportShared(cardRef, { rootMargin: '96px 0px', threshold: 0, freezeOnceVisible: true });
-  const retryCountRef = useRef(0);
-  const maxRetries = 2;
-  const hasLoadedRef = useRef(false);
-
-  // Calculate priority based on distance from current page
-  const getPriority = (): number => {
+  const priorityResolver = useCallback(() => {
     if (isActive) return Priority.CURRENT_VIEW;
     if (distanceFromCurrent <= 2) return Priority.PREFETCH_NEAR;
     if (distanceFromCurrent <= 8) return Priority.PREFETCH_FAR;
     return Priority.BACKGROUND;
-  };
+  }, [distanceFromCurrent, isActive]);
 
-  useEffect(() => {
-    let cancelled = false;
-    if (!isVisible || hasLoadedRef.current) {
-      return undefined;
-    }
+  const safeHeight = Math.max(panelHeight, 48);
+  const safeWidth = Math.max(Math.round(safeHeight * (4 / 3)), 48);
 
-    const load = async () => {
-      setThumbnail({ dataUrl: PLACEHOLDER_LOADING, status: 'loading' });
+  const { thumbnail, orientation, cardRef } = useThumbnailLoader({
+    image,
+    sourceType,
+    maxHeight: safeHeight,
+    maxWidth: safeWidth,
+    priorityResolver,
+    rootMargin: '96px 0px',
+  });
 
-      try {
-        const safeHeight = Math.max(panelHeight, 48);
-        const maxWidth = Math.round(safeHeight * (4 / 3));
-
-        const response: any = await runThumbnailTask(
-          () =>
-            window.electronAPI.invoke(channels.IMAGE_GET_THUMBNAIL, {
-              archiveId: image.archiveId,
-              image,
-              sourceType,
-              maxHeight: safeHeight,
-              maxWidth: Math.max(maxWidth, 48),
-            }) as Promise<any>,
-          getPriority() // Pass priority to queue
-        );
-
-        if (!cancelled && response?.dataUrl) {
-          const width = typeof response.width === 'number' ? response.width : undefined;
-          const height = typeof response.height === 'number' ? response.height : undefined;
-
-          setThumbnail({
-            dataUrl: response.dataUrl as string,
-            status: 'success',
-            width,
-            height,
-          });
-
-          hasLoadedRef.current = true;
-
-          if (typeof height === 'number' && typeof width === 'number') {
-            setOrientation(height > width ? 'portrait' : 'landscape');
-          }
-
-          retryCountRef.current = 0; // Reset retry count on success
-          return;
-        }
-      } catch (error) {
-        console.error('Failed to load thumbnail:', error);
-
-        // Retry logic with exponential backoff
-        if (retryCountRef.current < maxRetries) {
-          retryCountRef.current++;
-          console.log(`Retrying thumbnail load (${retryCountRef.current}/${maxRetries})...`);
-
-          // Exponential backoff: 1s, 2s
-          await new Promise(resolve => setTimeout(resolve, 1000 * retryCountRef.current));
-
-          if (!cancelled) {
-            load(); // Recursive retry
-          }
-          return;
-        }
-      }
-
-      // Final failure - show error placeholder
-      if (!cancelled) {
-        setThumbnail({
-          dataUrl: PLACEHOLDER_ERROR,
-          status: 'error',
-        });
-      }
-    };
-
-    load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [image.id, image.pathInArchive, image.fileSize, sourceType, panelHeight, isVisible, distanceFromCurrent, isActive]);
-
-  useEffect(() => {
-    hasLoadedRef.current = false;
-    retryCountRef.current = 0;
-  }, [image.id]);
-
-  useEffect(() => {
-    if (image.dimensions) {
-      setOrientation(image.dimensions.height > image.dimensions.width ? 'portrait' : 'landscape');
-    }
-  }, [image.dimensions]);
-
-  useEffect(() => {
-    if (!isActive || !cardRef.current) {
-      return;
-    }
-
-    const container = cardRef.current.parentElement as HTMLElement | null;
-    if (!container) {
-      return;
-    }
-
-    const containerWidth = container.clientWidth;
-    const cardWidth = cardRef.current.clientWidth;
-    const targetLeft = cardRef.current.offsetLeft - (containerWidth / 2 - cardWidth / 2);
-    const clampedLeft = Math.max(0, Math.min(targetLeft, container.scrollWidth - containerWidth));
-
-    container.scrollTo({ left: clampedLeft, behavior: 'smooth' });
-  }, [isActive]);
+  useAutoCenter(cardRef, { axis: 'horizontal', isActive });
 
   return (
     <button

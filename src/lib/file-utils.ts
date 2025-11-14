@@ -9,7 +9,8 @@ export function sanitizePath(filePath: string): string {
   const normalized = path.normalize(filePath);
 
   // Check for path traversal attempts
-  if (normalized.includes('..')) {
+  const segments = normalized.split(/[/\\]+/).filter(Boolean);
+  if (segments.some(segment => segment === '..')) {
     throw new Error(`Path traversal detected: ${filePath}`);
   }
 
@@ -28,7 +29,8 @@ export function validatePath(filePath: string): void {
   }
 
   // Check for path traversal
-  if (filePath.includes('..')) {
+  const segments = filePath.split(/[/\\]+/).filter(Boolean);
+  if (segments.some(segment => segment === '..')) {
     throw new Error(`Path traversal detected: ${filePath}`);
   }
 

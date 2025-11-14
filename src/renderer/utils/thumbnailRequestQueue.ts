@@ -30,7 +30,7 @@ class PrioritizedQueue {
     this.concurrency = Math.max(1, Math.min(6, Math.round(next)));
   }
 
-  async run<T>(task: Task<T>, priority = Priority.BACKGROUND): Promise<T> {
+  async run<T>(task: Task<T>, priority: number = Priority.BACKGROUND): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       this.pending.push({
         task,
@@ -78,7 +78,7 @@ class PrioritizedQueue {
 
 const queue = new PrioritizedQueue();
 
-export function runThumbnailTask<T>(task: Task<T>, priority = Priority.BACKGROUND): Promise<T> {
+export function runThumbnailTask<T>(task: Task<T>, priority: number = Priority.BACKGROUND): Promise<T> {
   return queue.run(task, priority);
 }
 
