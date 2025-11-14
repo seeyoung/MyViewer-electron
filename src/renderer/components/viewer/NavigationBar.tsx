@@ -19,6 +19,10 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
   const isFullscreen = useViewerStore(state => state.isFullscreen);
   const showFolderTree = useViewerStore(state => state.showFolderTree);
   const toggleFolderTree = useViewerStore(state => state.toggleFolderTree);
+  const autoSlideEnabled = useViewerStore(state => state.autoSlideEnabled);
+  const autoSlideInterval = useViewerStore(state => state.autoSlideInterval);
+  const setAutoSlideEnabled = useViewerStore(state => state.setAutoSlideEnabled);
+  const setAutoSlideInterval = useViewerStore(state => state.setAutoSlideInterval);
 
   const totalPages = images.length;
   const currentPage = currentPageIndex + 1; // Display 1-based index
@@ -60,6 +64,14 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
 
   const handleToggleAppFullscreen = () => {
     window.electronAPI.send('window-toggle-fullscreen');
+  };
+
+  const handleToggleAutoSlide = () => {
+    setAutoSlideEnabled(!autoSlideEnabled);
+  };
+
+  const handleAutoSlideIntervalChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setAutoSlideInterval(Number(event.target.value));
   };
 
   if (!currentSource) {
@@ -154,6 +166,25 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
         </div>
 
         <div className="fullscreen-controls">
+          <div className="autoslide-controls">
+            <button
+              onClick={handleToggleAutoSlide}
+              className={`panel-button ${autoSlideEnabled ? 'active' : ''}`}
+              title="Toggle auto slide"
+            >
+              {autoSlideEnabled ? 'Stop Auto Slide' : 'Start Auto Slide'}
+            </button>
+            <select
+              value={autoSlideInterval}
+              onChange={handleAutoSlideIntervalChange}
+            >
+              {[2000, 3000, 5000, 8000, 10000].map(value => (
+                <option key={value} value={value}>
+                  {value / 1000}s
+                </option>
+              ))}
+            </select>
+          </div>
           <button
             onClick={toggleFolderTree}
             className={`panel-button ${showFolderTree ? 'active' : ''}`}
@@ -315,6 +346,20 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
           gap: 0.5rem;
           padding-left: 0.5rem;
           border-left: 1px solid #4d4d4d;
+        }
+
+        .autoslide-controls {
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
+        }
+
+        .autoslide-controls select {
+          background: #1f1f1f;
+          color: #ddd;
+          border: 1px solid #555;
+          border-radius: 4px;
+          padding: 0.2rem 0.4rem;
         }
 
         .fullscreen-button {

@@ -8,6 +8,7 @@ import LoadingIndicator from './components/shared/LoadingIndicator';
 import { useViewerStore } from './store/viewerStore';
 import { useArchive } from './hooks/useArchive';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useAutoSlide } from './hooks/useAutoSlide';
 import { SourceDescriptor, SourceType } from '@shared/types/Source';
 import * as channels from '@shared/constants/ipc-channels';
 
@@ -34,6 +35,7 @@ function App() {
   // Enable keyboard shortcuts
   console.log('⌨️ About to enable keyboard shortcuts...');
   useKeyboardShortcuts();
+  useAutoSlide();
 
   // Listen for file-opened event from main process
   useEffect(() => {
