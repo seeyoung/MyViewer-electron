@@ -351,24 +351,38 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
     }
 
     // Update entry index
-    set({ currentEntryIndex: nextIndex });
+    set({ currentEntryIndex: nextIndex, isLoading: true, error: null });
 
-    // Open the next source
-    const ipcClient = await import('../services/ipc');
-    const { useArchive } = await import('../hooks/useArchive');
-
+    // Open the next source via IPC
     try {
-      // Determine if it's a folder or archive and open appropriately
-      if (nextEntry.source_type === 'folder') {
-        // Open folder - will be handled by useArchive hook
-        console.log('Opening folder:', nextEntry.source_path);
-      } else {
-        // Open archive
-        console.log('Opening archive:', nextEntry.source_path);
-      }
+      const channel = nextEntry.source_type === 'folder'
+        ? (await import('@shared/constants/ipc-channels')).FOLDER_OPEN
+        : (await import('@shared/constants/ipc-channels')).ARCHIVE_OPEN;
+
+      const result = await window.electronAPI.invoke(channel,
+        nextEntry.source_type === 'folder'
+          ? { folderPath: nextEntry.source_path }
+          : { filePath: nextEntry.source_path }
+      );
+
+      const { source, session, initialImages } = result;
+
+      // Update store with new source
+      set({
+        currentSource: source,
+        currentSession: session,
+        images: initialImages,
+        currentPageIndex: session?.currentPageIndex || 0,
+        isLoading: false,
+      });
+
+      console.log(`Opened ${nextEntry.source_type}:`, nextEntry.source_path);
     } catch (error) {
       console.error('Failed to open next playlist entry:', error);
-      set({ error: `Failed to open: ${nextEntry.label}` });
+      set({
+        error: `Failed to open: ${nextEntry.label}`,
+        isLoading: false
+      });
     }
   },
 
@@ -397,18 +411,38 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
     }
 
     // Update entry index
-    set({ currentEntryIndex: prevIndex });
+    set({ currentEntryIndex: prevIndex, isLoading: true, error: null });
 
-    // Open the previous source
+    // Open the previous source via IPC
     try {
-      if (prevEntry.source_type === 'folder') {
-        console.log('Opening folder:', prevEntry.source_path);
-      } else {
-        console.log('Opening archive:', prevEntry.source_path);
-      }
+      const channel = prevEntry.source_type === 'folder'
+        ? (await import('@shared/constants/ipc-channels')).FOLDER_OPEN
+        : (await import('@shared/constants/ipc-channels')).ARCHIVE_OPEN;
+
+      const result = await window.electronAPI.invoke(channel,
+        prevEntry.source_type === 'folder'
+          ? { folderPath: prevEntry.source_path }
+          : { filePath: prevEntry.source_path }
+      );
+
+      const { source, session, initialImages } = result;
+
+      // Update store with new source
+      set({
+        currentSource: source,
+        currentSession: session,
+        images: initialImages,
+        currentPageIndex: session?.currentPageIndex || 0,
+        isLoading: false,
+      });
+
+      console.log(`Opened ${prevEntry.source_type}:`, prevEntry.source_path);
     } catch (error) {
       console.error('Failed to open previous playlist entry:', error);
-      set({ error: `Failed to open: ${prevEntry.label}` });
+      set({
+        error: `Failed to open: ${prevEntry.label}`,
+        isLoading: false
+      });
     }
   },
 
@@ -427,18 +461,38 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
     }
 
     // Update entry index
-    set({ currentEntryIndex: index });
+    set({ currentEntryIndex: index, isLoading: true, error: null });
 
-    // Open the source
+    // Open the source via IPC
     try {
-      if (entry.source_type === 'folder') {
-        console.log('Opening folder:', entry.source_path);
-      } else {
-        console.log('Opening archive:', entry.source_path);
-      }
+      const channel = entry.source_type === 'folder'
+        ? (await import('@shared/constants/ipc-channels')).FOLDER_OPEN
+        : (await import('@shared/constants/ipc-channels')).ARCHIVE_OPEN;
+
+      const result = await window.electronAPI.invoke(channel,
+        entry.source_type === 'folder'
+          ? { folderPath: entry.source_path }
+          : { filePath: entry.source_path }
+      );
+
+      const { source, session, initialImages } = result;
+
+      // Update store with new source
+      set({
+        currentSource: source,
+        currentSession: session,
+        images: initialImages,
+        currentPageIndex: session?.currentPageIndex || 0,
+        isLoading: false,
+      });
+
+      console.log(`Opened ${entry.source_type}:`, entry.source_path);
     } catch (error) {
       console.error('Failed to open playlist entry:', error);
-      set({ error: `Failed to open: ${entry.label}` });
+      set({
+        error: `Failed to open: ${entry.label}`,
+        isLoading: false
+      });
     }
   },
 
