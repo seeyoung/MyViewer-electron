@@ -1,4 +1,4 @@
-import { ipcMain, IpcMainInvokeEvent } from 'electron';
+import { ipcMain, IpcMainInvokeEvent, BrowserWindow } from 'electron';
 
 /**
  * IPC Handler Registry
@@ -81,49 +81,38 @@ const thumbnailService = new ThumbnailService(imageService, folderService);
  * Initialize all IPC handlers
  * This will be called from main process on app ready
  */
-export function initializeIpcHandlers(): void {
+export function initializeIpcHandlers(mainWindow: BrowserWindow): void {
+  // Set up event forwarding from FolderService to renderer
+  folderService.on('scan-progress', (event) => {
+    mainWindow.webContents.send(channels.FOLDER_SCAN_PROGRESS, event);
+  });
+
+  folderService.on('scan-complete', (event) => {
+    mainWindow.webContents.send(channels.FOLDER_SCAN_COMPLETE, event);
+  });
+
+  // Set up event forwarding from ArchiveService to renderer
+  archiveService.on('scan-progress', (event) => {
+    mainWindow.webContents.send(channels.ARCHIVE_SCAN_PROGRESS, event);
+  });
+
+  archiveService.on('scan-complete', (event) => {
+    mainWindow.webContents.send(channels.ARCHIVE_SCAN_COMPLETE, event);
+  });
   // Archive handlers
   registry.register(
     channels.ARCHIVE_OPEN,
     withErrorHandling(async (event, data: any) => {
       const { filePath, password } = data;
-      const archive = await archiveService.openArchive(filePath, password);
+      const result = await archiveService.openArchiveProgressive(filePath, password);
 
       // Get or create session
-      const session = sessionService.getOrCreateSession(filePath, SourceType.ARCHIVE, archive.id);
+      const session = sessionService.getOrCreateSession(
+        filePath,
+        SourceType.ARCHIVE,
+        result.source.id
+      );
 
-      // Get all images from folder tree
-      const images = getAllImagesFromFolder(archive.rootFolder);
-
-      // Create completely serializable objects
-      const serializableArchive = {
-        id: archive.id,
-        filePath: archive.filePath,
-        fileName: archive.fileName,
-        format: archive.format,
-        fileSize: archive.fileSize,
-        isPasswordProtected: archive.isPasswordProtected,
-        totalImageCount: archive.totalImageCount,
-        totalFileCount: archive.totalFileCount,
-        isOpen: archive.isOpen,
-        openedAt: archive.openedAt,
-        lastAccessedAt: archive.lastAccessedAt,
-      };
-
-      // Ensure images are completely serializable
-      const serializableImages = images.map(img => ({
-        id: img.id,
-        archiveId: img.archiveId,
-        pathInArchive: img.pathInArchive,
-        fileName: img.fileName,
-        format: img.format,
-        size: img.size,
-        width: img.width,
-        height: img.height,
-        lastModified: img.lastModified,
-      }));
-
-      // Ensure session is serializable
       const serializableSession = {
         id: session.id,
         sourcePath: session.sourcePath,
@@ -144,23 +133,17 @@ export function initializeIpcHandlers(): void {
         lastActivityAt: session.lastActivityAt,
       };
 
-      // Use JSON.parse/stringify to ensure completely clean objects
-      const result = {
-        archive: serializableArchive,
+      const response = {
+        source: result.source,
         session: serializableSession,
-        images: serializableImages,
+        initialImages: result.initialImages,
+        rootFolder: result.rootFolder,
+        scanToken: result.scanToken,
+        estimatedTotal: result.estimatedTotal,
+        isComplete: result.isComplete,
       };
 
-      // Deep clone to remove any hidden references
-      const cleanResult = JSON.parse(JSON.stringify(result));
-      
-      console.log('🧹 Cleaned result:', {
-        archiveId: cleanResult.archive.id,
-        imageCount: cleanResult.images.length,
-        sessionId: cleanResult.session.id
-      });
-
-      return cleanResult;
+      return JSON.parse(JSON.stringify(response));
     })
   );
 
@@ -351,7 +334,7 @@ function getAllImagesFromFolder(folder: any): any[] {
     channels.FOLDER_OPEN,
     withErrorHandling(async (event, data: any) => {
       const { folderPath } = data;
-      const result = await folderService.openFolder(folderPath);
+      const result = await folderService.openFolderProgressive(folderPath);
 
       const session = sessionService.getOrCreateSession(
         folderPath,
@@ -382,10 +365,31 @@ function getAllImagesFromFolder(folder: any): any[] {
       const response = {
         source: result.source,
         session: serializableSession,
-        images: result.images,
+        initialImages: result.initialImages,
         rootFolder: result.rootFolder,
+        scanToken: result.scanToken,
+        estimatedTotal: result.estimatedTotal,
+        isComplete: result.isComplete,
       };
 
       return JSON.parse(JSON.stringify(response));
+    })
+  );
+
+  registry.register(
+    channels.FOLDER_SCAN_CANCEL,
+    withErrorHandling(async (event, data: any) => {
+      const { scanToken } = data;
+      const cancelled = await folderService.cancelScan(scanToken);
+      return { success: cancelled };
+    })
+  );
+
+  registry.register(
+    channels.ARCHIVE_SCAN_CANCEL,
+    withErrorHandling(async (event, data: any) => {
+      const { scanToken } = data;
+      const cancelled = await archiveService.cancelScan(scanToken);
+      return { success: cancelled };
     })
   );
