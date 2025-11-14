@@ -107,6 +107,121 @@ class IpcClient {
   public onScanComplete(callback: (event: ScanCompleteEvent) => void): () => void {
     return this.onFolderScanComplete(callback);
   }
+
+  // Playlist operations
+  /**
+   * Create a new playlist
+   */
+  public async createPlaylist(name: string, description?: string): Promise<any> {
+    return this.invoke(channels.PLAYLIST_CREATE, { name, description });
+  }
+
+  /**
+   * Update playlist metadata
+   */
+  public async updatePlaylist(
+    id: string,
+    updates: { name?: string; description?: string }
+  ): Promise<any> {
+    return this.invoke(channels.PLAYLIST_UPDATE, { id, ...updates });
+  }
+
+  /**
+   * Delete a playlist
+   */
+  public async deletePlaylist(id: string): Promise<{ success: boolean }> {
+    return this.invoke(channels.PLAYLIST_DELETE, { id });
+  }
+
+  /**
+   * Get all playlists
+   */
+  public async getAllPlaylists(): Promise<any[]> {
+    return this.invoke(channels.PLAYLIST_GET_ALL);
+  }
+
+  /**
+   * Get playlist with all entries
+   */
+  public async getPlaylistById(id: string): Promise<any | null> {
+    return this.invoke(channels.PLAYLIST_GET_BY_ID, { id });
+  }
+
+  /**
+   * Add a source to playlist
+   */
+  public async addPlaylistEntry(
+    playlistId: string,
+    sourcePath: string,
+    position?: number,
+    customLabel?: string
+  ): Promise<any> {
+    return this.invoke(channels.PLAYLIST_ADD_ENTRY, {
+      playlistId,
+      sourcePath,
+      position,
+      customLabel,
+    });
+  }
+
+  /**
+   * Add multiple sources to playlist
+   */
+  public async addPlaylistEntriesBatch(
+    playlistId: string,
+    sourcePaths: string[],
+    insertPosition?: number
+  ): Promise<any[]> {
+    return this.invoke(channels.PLAYLIST_ADD_ENTRIES_BATCH, {
+      playlistId,
+      sourcePaths,
+      insertPosition,
+    });
+  }
+
+  /**
+   * Remove entry from playlist
+   */
+  public async removePlaylistEntry(playlistId: string, position: number): Promise<{ success: boolean }> {
+    return this.invoke(channels.PLAYLIST_REMOVE_ENTRY, { playlistId, position });
+  }
+
+  /**
+   * Reorder entries in playlist
+   */
+  public async reorderPlaylistEntries(
+    playlistId: string,
+    fromPosition: number,
+    toPosition: number
+  ): Promise<any[]> {
+    return this.invoke(channels.PLAYLIST_REORDER_ENTRIES, {
+      playlistId,
+      fromPosition,
+      toPosition,
+    });
+  }
+
+  /**
+   * Update entry metadata
+   */
+  public async updatePlaylistEntry(
+    playlistId: string,
+    position: number,
+    updates: { label?: string; thumbnail_path?: string }
+  ): Promise<any> {
+    return this.invoke(channels.PLAYLIST_UPDATE_ENTRY, {
+      playlistId,
+      position,
+      updates,
+    });
+  }
+
+  /**
+   * Clean up invalid entries (non-existent paths)
+   */
+  public async cleanupInvalidPlaylistEntries(playlistId: string): Promise<{ removedCount: number }> {
+    return this.invoke(channels.PLAYLIST_CLEANUP_INVALID, { playlistId });
+  }
 }
 
 // Singleton instance

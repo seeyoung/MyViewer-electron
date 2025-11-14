@@ -49,3 +49,18 @@ export const ARCHIVE_SCAN_PROGRESS = 'archive:scan-progress';
 // Settings operations
 export const SETTINGS_GET = 'settings:get';
 export const SETTINGS_UPDATE = 'settings:update';
+
+// Playlist operations
+export const PLAYLIST_CREATE = 'playlist:create';
+export const PLAYLIST_UPDATE = 'playlist:update';
+export const PLAYLIST_DELETE = 'playlist:delete';
+export const PLAYLIST_GET_ALL = 'playlist:get-all';
+export const PLAYLIST_GET_BY_ID = 'playlist:get-by-id';
+
+// Playlist entry operations
+export const PLAYLIST_ADD_ENTRY = 'playlist:add-entry';
+export const PLAYLIST_ADD_ENTRIES_BATCH = 'playlist:add-entries-batch';
+export const PLAYLIST_REMOVE_ENTRY = 'playlist:remove-entry';
+export const PLAYLIST_REORDER_ENTRIES = 'playlist:reorder-entries';
+export const PLAYLIST_UPDATE_ENTRY = 'playlist:update-entry';
+export const PLAYLIST_CLEANUP_INVALID = 'playlist:cleanup-invalid';

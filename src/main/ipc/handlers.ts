@@ -62,6 +62,8 @@ import { SessionService } from '../services/SessionService';
 import { FolderService } from '../services/FolderService';
 import { RecentSourcesService } from '../services/RecentSourcesService';
 import { ThumbnailService } from '../services/ThumbnailService';
+import { PlaylistService } from '../services/PlaylistService';
+import { PlaylistRepository } from '../repositories/PlaylistRepository';
 import { withErrorHandling, IpcErrorCode, createIpcError } from './error-handler';
 import * as channels from '@shared/constants/ipc-channels';
 import { SourceDescriptor, SourceType } from '@shared/types/Source';
@@ -76,6 +78,8 @@ const sessionService = new SessionService();
 const folderService = new FolderService();
 const recentSourcesService = new RecentSourcesService();
 const thumbnailService = new ThumbnailService(imageService, folderService);
+const playlistRepository = new PlaylistRepository();
+const playlistService = new PlaylistService(playlistRepository);
 
 /**
  * Initialize all IPC handlers
@@ -391,5 +395,118 @@ function getAllImagesFromFolder(folder: any): any[] {
       const { scanToken } = data;
       const cancelled = await archiveService.cancelScan(scanToken);
       return { success: cancelled };
+    })
+  );
+
+  // Playlist handlers
+  registry.register(
+    channels.PLAYLIST_CREATE,
+    withErrorHandling(async (event, data: any) => {
+      const { name, description } = data;
+      const playlist = playlistService.createPlaylist(name, description);
+      return playlist;
+    })
+  );
+
+  registry.register(
+    channels.PLAYLIST_UPDATE,
+    withErrorHandling(async (event, data: any) => {
+      const { id, name, description } = data;
+      const updated = playlistService.updatePlaylist(id, { name, description });
+      return updated;
+    })
+  );
+
+  registry.register(
+    channels.PLAYLIST_DELETE,
+    withErrorHandling(async (event, data: any) => {
+      const { id } = data;
+      playlistService.deletePlaylist(id);
+      return { success: true };
+    })
+  );
+
+  registry.register(
+    channels.PLAYLIST_GET_ALL,
+    withErrorHandling(async () => {
+      const playlists = playlistService.getAllPlaylists();
+      return playlists;
+    })
+  );
+
+  registry.register(
+    channels.PLAYLIST_GET_BY_ID,
+    withErrorHandling(async (event, data: any) => {
+      const { id } = data;
+      const result = playlistService.getPlaylistWithEntries(id);
+      return result;
+    })
+  );
+
+  // Playlist entry handlers
+  registry.register(
+    channels.PLAYLIST_ADD_ENTRY,
+    withErrorHandling(async (event, data: any) => {
+      const { playlistId, sourcePath, position, customLabel } = data;
+      const entry = await playlistService.addSourceToPlaylist(
+        playlistId,
+        sourcePath,
+        position,
+        customLabel
+      );
+      return entry;
+    })
+  );
+
+  registry.register(
+    channels.PLAYLIST_ADD_ENTRIES_BATCH,
+    withErrorHandling(async (event, data: any) => {
+      const { playlistId, sourcePaths, insertPosition } = data;
+      const entries = await playlistService.addMultipleSources(
+        playlistId,
+        sourcePaths,
+        insertPosition
+      );
+      return entries;
+    })
+  );
+
+  registry.register(
+    channels.PLAYLIST_REMOVE_ENTRY,
+    withErrorHandling(async (event, data: any) => {
+      const { playlistId, position } = data;
+      playlistService.removeEntry(playlistId, position);
+      return { success: true };
+    })
+  );
+
+  registry.register(
+    channels.PLAYLIST_REORDER_ENTRIES,
+    withErrorHandling(async (event, data: any) => {
+      const { playlistId, fromPosition, toPosition } = data;
+      const reordered = playlistService.reorderEntries(
+        playlistId,
+        fromPosition,
+        toPosition
+      );
+      return reordered;
+    })
+  );
+
+  registry.register(
+    channels.PLAYLIST_UPDATE_ENTRY,
+    withErrorHandling(async (event, data: any) => {
+      const { playlistId, position, updates } = data;
+      const updated = playlistService.updateEntry(playlistId, position, updates);
+      return updated;
+    })
+  );
+
+  registry.register(
+    channels.PLAYLIST_CLEANUP_INVALID,
+    withErrorHandling(async (event, data: any) => {
+      const { playlistId } = data;
+      const removedCount = await playlistService.cleanupInvalidEntries(playlistId);
+      return { removedCount };
     })
   );
