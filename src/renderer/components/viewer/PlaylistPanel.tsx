@@ -4,6 +4,21 @@ import { Playlist } from '@shared/types/playlist';
 import PlaylistControls from './PlaylistControls';
 import PlaylistEntry from './PlaylistEntry';
 import * as channels from '@shared/constants/ipc-channels';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 
 interface PlaylistPanelProps {
   className?: string;
@@ -33,7 +48,14 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editingName, setEditingName] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
-  const [draggedPosition, setDraggedPosition] = useState<number | null>(null);
+
+  // @dnd-kit sensors for drag and drop
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // Load playlists on mount and restore state
   useEffect(() => {
@@ -363,28 +385,26 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
     goToEntryByIndex(position);
   };
 
-  const handleEntryDragStart = (position: number) => {
-    setDraggedPosition(position);
-  };
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
 
-  const handleEntryDrop = async (toPosition: number) => {
-    if (draggedPosition === null || !activePlaylist || draggedPosition === toPosition) {
-      setDraggedPosition(null);
-      return;
-    }
+    if (!over || !activePlaylist) return;
+
+    const oldIndex = playlistEntries.findIndex(e => e.position === Number(active.id));
+    const newIndex = playlistEntries.findIndex(e => e.position === Number(over.id));
+
+    if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
 
     try {
       await window.electronAPI.invoke(channels.PLAYLIST_REORDER_ENTRIES, {
         playlistId: activePlaylist.id,
-        fromPosition: draggedPosition,
-        toPosition,
+        fromPosition: oldIndex,
+        toPosition: newIndex,
       });
       await loadPlaylistEntries(activePlaylist.id);
-      setDraggedPosition(null);
     } catch (error) {
       console.error('Failed to reorder entries:', error);
       alert('Failed to reorder entries: ' + (error as Error).message);
-      setDraggedPosition(null);
     }
   };
 
@@ -507,20 +527,29 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
           ) : playlistEntries.length === 0 ? (
             <p>Drop files or folders here to add to playlist</p>
           ) : (
-            <div className="playlist-entry-list">
-              {playlistEntries.map((entry, index) => (
-                <PlaylistEntry
-                  key={`${entry.playlist_id}-${entry.position}`}
-                  entry={entry}
-                  isActive={index === currentEntryIndex}
-                  onClick={() => handleEntryClick(entry.position)}
-                  onRemove={() => handleRemoveEntry(entry.position)}
-                  onUpdateLabel={handleUpdateEntryLabel}
-                  onDragStart={handleEntryDragStart}
-                  onDrop={handleEntryDrop}
-                />
-              ))}
-            </div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={playlistEntries.map(e => e.position)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="playlist-entry-list">
+                  {playlistEntries.map((entry, index) => (
+                    <PlaylistEntry
+                      key={entry.position}
+                      entry={entry}
+                      isActive={index === currentEntryIndex}
+                      onClick={() => handleEntryClick(entry.position)}
+                      onRemove={() => handleRemoveEntry(entry.position)}
+                      onUpdateLabel={handleUpdateEntryLabel}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
           )}
         </div>
 

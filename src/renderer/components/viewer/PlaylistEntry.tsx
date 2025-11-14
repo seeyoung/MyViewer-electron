@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { PlaylistEntry as PlaylistEntryType } from '@shared/types/playlist';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface PlaylistEntryProps {
   entry: PlaylistEntryType;
@@ -7,9 +9,6 @@ interface PlaylistEntryProps {
   onClick: () => void;
   onRemove: () => void;
   onUpdateLabel?: (position: number, newLabel: string) => void;
-  onDragStart?: (position: number) => void;
-  onDragOver?: (position: number) => void;
-  onDrop?: (position: number) => void;
 }
 
 const PlaylistEntry: React.FC<PlaylistEntryProps> = ({
@@ -18,14 +17,18 @@ const PlaylistEntry: React.FC<PlaylistEntryProps> = ({
   onClick,
   onRemove,
   onUpdateLabel,
-  onDragStart,
-  onDragOver,
-  onDrop
 }) => {
-  const [isDragging, setIsDragging] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingLabel, setEditingLabel] = useState('');
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: entry.position, disabled: isEditing });
 
   const handleRemoveClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -53,55 +56,26 @@ const PlaylistEntry: React.FC<PlaylistEntryProps> = ({
     setEditingLabel('');
   };
 
-  const handleDragStart = (e: React.DragEvent) => {
-    if (isEditing) return; // Prevent drag while editing
-    e.stopPropagation();
-    setIsDragging(true);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', entry.position.toString());
-    onDragStart?.(entry.position);
-  };
-
-  const handleDragEnd = () => {
-    setIsDragging(false);
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = 'move';
-    setIsDragOver(true);
-    onDragOver?.(entry.position);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(false);
-    onDrop?.(entry.position);
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
   };
 
   const entryClasses = [
     'playlist-entry',
     isActive ? 'active' : '',
     isDragging ? 'dragging' : '',
-    isDragOver ? 'drag-over' : ''
   ].filter(Boolean).join(' ');
 
   return (
     <div
+      ref={setNodeRef}
+      style={style}
       className={entryClasses}
       onClick={onClick}
-      draggable={true}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+      {...attributes}
+      {...listeners}
     >
       <div className="entry-thumbnail">
         {entry.thumbnail_path ? (
