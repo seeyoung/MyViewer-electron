@@ -1,4 +1,4 @@
-import { RefObject, useEffect, useState } from 'react';
+import { RefObject, useEffect, useState, useRef } from 'react';
 
 interface UseInViewportOptions extends IntersectionObserverInit {
   freezeOnceVisible?: boolean;
@@ -9,6 +9,7 @@ export function useInViewport<T extends Element>(
   { threshold = 0, root = null, rootMargin = '0px', freezeOnceVisible = false }: UseInViewportOptions = {}
 ): boolean {
   const [isIntersecting, setIntersecting] = useState(false);
+  const frozenRef = useRef(false);
 
   useEffect(() => {
     const target = targetRef.current;
@@ -16,7 +17,8 @@ export function useInViewport<T extends Element>(
       return;
     }
 
-    if (freezeOnceVisible && isIntersecting) {
+    // Skip if already frozen
+    if (freezeOnceVisible && frozenRef.current) {
       return;
     }
 
@@ -26,13 +28,19 @@ export function useInViewport<T extends Element>(
         if (!entry) {
           return;
         }
+
         if (entry.isIntersecting) {
           setIntersecting(true);
+
           if (freezeOnceVisible) {
+            frozenRef.current = true;
             observer.disconnect();
           }
         } else {
-          setIntersecting(false);
+          // Only update state if not frozen
+          if (!freezeOnceVisible) {
+            setIntersecting(false);
+          }
         }
       },
       { threshold, root, rootMargin }
@@ -43,7 +51,7 @@ export function useInViewport<T extends Element>(
     return () => {
       observer.disconnect();
     };
-  }, [targetRef, threshold, root, rootMargin, freezeOnceVisible, isIntersecting]);
+  }, [targetRef, threshold, root, rootMargin, freezeOnceVisible]); // Removed isIntersecting
 
   return isIntersecting;
 }
