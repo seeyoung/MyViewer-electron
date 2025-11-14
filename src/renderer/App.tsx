@@ -4,6 +4,7 @@ import NavigationBar from './components/viewer/NavigationBar';
 import ImageViewer from './components/viewer/ImageViewer';
 import FolderSidebar from './components/viewer/FolderSidebar';
 import BottomThumbnails from './components/viewer/BottomThumbnails';
+import PlaylistPanel from './components/viewer/PlaylistPanel';
 import LoadingIndicator from './components/shared/LoadingIndicator';
 import { useViewerStore } from './store/viewerStore';
 import { useArchive } from './hooks/useArchive';
@@ -296,6 +297,7 @@ function App() {
             <BottomThumbnails />
           )}
         </main>
+        <PlaylistPanel />
       </div>
     </ErrorBoundary>
   );

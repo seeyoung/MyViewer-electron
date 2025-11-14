@@ -25,6 +25,8 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
   const setAutoSlideInterval = useViewerStore(state => state.setAutoSlideInterval);
   const autoSlideOverlay = useViewerStore(state => state.autoSlideIntervalOverlay);
   const showAutoSlideOverlay = useViewerStore(state => state.showAutoSlideOverlay);
+  const showPlaylistPanel = useViewerStore(state => state.showPlaylistPanel);
+  const togglePlaylistPanel = useViewerStore(state => state.togglePlaylistPanel);
 
   const totalPages = images.length;
   const currentPage = currentPageIndex + 1; // Display 1-based index
@@ -200,6 +202,14 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
             title="Toggle Folder Sidebar"
           >
             {showFolderTree ? 'Hide Folders' : 'Show Folders'}
+          </button>
+
+          <button
+            onClick={togglePlaylistPanel}
+            className={`panel-button ${showPlaylistPanel ? 'active' : ''}`}
+            title="Toggle Playlist Panel"
+          >
+            {showPlaylistPanel ? 'Hide Playlist' : 'Show Playlist'}
           </button>
 
           <button

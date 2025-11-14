@@ -1,0 +1,444 @@
+import React, { useState, useEffect } from 'react';
+import { useViewerStore } from '../../store/viewerStore';
+import { Playlist } from '@shared/types/playlist';
+import PlaylistControls from './PlaylistControls';
+import PlaylistEntry from './PlaylistEntry';
+import * as channels from '@shared/constants/ipc-channels';
+
+interface PlaylistPanelProps {
+  className?: string;
+}
+
+const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
+  const showPlaylistPanel = useViewerStore(state => state.showPlaylistPanel);
+  const togglePlaylistPanel = useViewerStore(state => state.togglePlaylistPanel);
+  const playlists = useViewerStore(state => state.playlists);
+  const activePlaylist = useViewerStore(state => state.activePlaylist);
+  const playlistEntries = useViewerStore(state => state.playlistEntries);
+  const currentEntryIndex = useViewerStore(state => state.currentEntryIndex);
+  const setPlaylists = useViewerStore(state => state.setPlaylists);
+  const setActivePlaylist = useViewerStore(state => state.setActivePlaylist);
+  const setPlaylistEntries = useViewerStore(state => state.setPlaylistEntries);
+  const goToEntryByIndex = useViewerStore(state => state.goToEntryByIndex);
+
+  const [isCreating, setIsCreating] = useState(false);
+  const [newPlaylistName, setNewPlaylistName] = useState('');
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  // Load playlists on mount
+  useEffect(() => {
+    loadPlaylists();
+  }, []);
+
+  // Load entries when active playlist changes
+  useEffect(() => {
+    if (activePlaylist) {
+      loadPlaylistEntries(activePlaylist.id);
+    } else {
+      setPlaylistEntries([]);
+    }
+  }, [activePlaylist?.id]);
+
+  const loadPlaylists = async () => {
+    try {
+      const result = await window.electronAPI.invoke(channels.PLAYLIST_GET_ALL);
+      setPlaylists(result || []);
+    } catch (error) {
+      console.error('Failed to load playlists:', error);
+    }
+  };
+
+  const loadPlaylistEntries = async (playlistId: string) => {
+    try {
+      const result = await window.electronAPI.invoke(channels.PLAYLIST_GET_BY_ID, { id: playlistId });
+      if (result?.entries) {
+        setPlaylistEntries(result.entries);
+      }
+    } catch (error) {
+      console.error('Failed to load playlist entries:', error);
+    }
+  };
+
+  const handleCreatePlaylist = async () => {
+    if (!newPlaylistName.trim()) return;
+
+    try {
+      const result = await window.electronAPI.invoke(channels.PLAYLIST_CREATE, {
+        name: newPlaylistName.trim(),
+        description: '',
+      });
+
+      await loadPlaylists();
+      setActivePlaylist(result);
+      setNewPlaylistName('');
+      setIsCreating(false);
+    } catch (error) {
+      console.error('Failed to create playlist:', error);
+      alert('Failed to create playlist: ' + (error as Error).message);
+    }
+  };
+
+  const handleDeletePlaylist = async () => {
+    if (!activePlaylist) return;
+
+    const confirmed = confirm(`Delete playlist "${activePlaylist.name}"?`);
+    if (!confirmed) return;
+
+    try {
+      await window.electronAPI.invoke(channels.PLAYLIST_DELETE, { id: activePlaylist.id });
+      setActivePlaylist(null);
+      await loadPlaylists();
+    } catch (error) {
+      console.error('Failed to delete playlist:', error);
+      alert('Failed to delete playlist: ' + (error as Error).message);
+    }
+  };
+
+  const handlePlaylistSelect = (playlistId: string) => {
+    const playlist = playlists.find(p => p.id === playlistId);
+    setActivePlaylist(playlist || null);
+  };
+
+  const handleRemoveEntry = async (position: number) => {
+    if (!activePlaylist) return;
+
+    try {
+      await window.electronAPI.invoke(channels.PLAYLIST_REMOVE_ENTRY, {
+        playlistId: activePlaylist.id,
+        position,
+      });
+      await loadPlaylistEntries(activePlaylist.id);
+    } catch (error) {
+      console.error('Failed to remove entry:', error);
+      alert('Failed to remove entry: ' + (error as Error).message);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    if (!activePlaylist) {
+      alert('Please select or create a playlist first');
+      return;
+    }
+
+    const files = e.dataTransfer?.files;
+    if (!files || files.length === 0) return;
+
+    const paths = Array.from(files).map(f => f.path);
+
+    try {
+      await window.electronAPI.invoke(channels.PLAYLIST_ADD_ENTRIES_BATCH, {
+        playlistId: activePlaylist.id,
+        sourcePaths: paths,
+      });
+      await loadPlaylistEntries(activePlaylist.id);
+    } catch (error) {
+      console.error('Failed to add entries:', error);
+      alert('Failed to add entries: ' + (error as Error).message);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleEntryClick = (position: number) => {
+    goToEntryByIndex(position);
+  };
+
+  const panelClasses = ['playlist-panel', className, showPlaylistPanel ? 'open' : ''].filter(Boolean).join(' ');
+
+  return (
+    <>
+      {showPlaylistPanel && <div className="playlist-backdrop" onClick={togglePlaylistPanel} />}
+      <div className={panelClasses}>
+        <div className="playlist-header">
+          <h2>Playlists</h2>
+          <button
+            className="close-button"
+            onClick={togglePlaylistPanel}
+            title="Close playlist panel"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="playlist-selector">
+          <select
+            value={activePlaylist?.id || ''}
+            onChange={(e) => handlePlaylistSelect(e.target.value)}
+            disabled={isCreating}
+          >
+            <option value="">Select a playlist...</option>
+            {playlists.map(playlist => (
+              <option key={playlist.id} value={playlist.id}>
+                {playlist.name}
+              </option>
+            ))}
+          </select>
+
+          <div className="playlist-actions">
+            <button
+              className="action-button create"
+              onClick={() => setIsCreating(!isCreating)}
+              title="Create new playlist"
+            >
+              {isCreating ? 'Cancel' : '+ New'}
+            </button>
+            {activePlaylist && (
+              <button
+                className="action-button delete"
+                onClick={handleDeletePlaylist}
+                title="Delete current playlist"
+              >
+                Delete
+              </button>
+            )}
+          </div>
+        </div>
+
+        {isCreating && (
+          <div className="playlist-create-form">
+            <input
+              type="text"
+              placeholder="Playlist name"
+              value={newPlaylistName}
+              onChange={(e) => setNewPlaylistName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleCreatePlaylist();
+                if (e.key === 'Escape') setIsCreating(false);
+              }}
+              autoFocus
+            />
+            <button onClick={handleCreatePlaylist} disabled={!newPlaylistName.trim()}>
+              Create
+            </button>
+          </div>
+        )}
+
+        {activePlaylist && <PlaylistControls />}
+
+        <div
+          className={`playlist-drop-zone ${isDragOver ? 'drag-over' : ''} ${!activePlaylist ? 'disabled' : ''}`}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+        >
+          {!activePlaylist ? (
+            <p>Select or create a playlist to add entries</p>
+          ) : playlistEntries.length === 0 ? (
+            <p>Drop files or folders here to add to playlist</p>
+          ) : (
+            <div className="playlist-entry-list">
+              {playlistEntries.map((entry, index) => (
+                <PlaylistEntry
+                  key={`${entry.playlist_id}-${entry.position}`}
+                  entry={entry}
+                  isActive={index === currentEntryIndex}
+                  onClick={() => handleEntryClick(entry.position)}
+                  onRemove={() => handleRemoveEntry(entry.position)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <style>{`
+          .playlist-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 99;
+          }
+
+          .playlist-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 320px;
+            height: 100vh;
+            background-color: #2d2d2d;
+            border-left: 1px solid #3d3d3d;
+            z-index: 100;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+          }
+
+          .playlist-panel.open {
+            transform: translateX(0);
+          }
+
+          .playlist-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid #3d3d3d;
+          }
+
+          .playlist-header h2 {
+            margin: 0;
+            font-size: 1.25rem;
+            color: #ffffff;
+          }
+
+          .close-button {
+            background: none;
+            border: none;
+            color: #cccccc;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+
+          .close-button:hover {
+            color: #ffffff;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+          }
+
+          .playlist-selector {
+            padding: 1rem;
+            border-bottom: 1px solid #3d3d3d;
+          }
+
+          .playlist-selector select {
+            width: 100%;
+            padding: 0.5rem;
+            background-color: #1d1d1d;
+            border: 1px solid #3d3d3d;
+            border-radius: 4px;
+            color: #ffffff;
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+          }
+
+          .playlist-actions {
+            display: flex;
+            gap: 0.5rem;
+          }
+
+          .action-button {
+            flex: 1;
+            padding: 0.5rem;
+            border: 1px solid #3d3d3d;
+            border-radius: 4px;
+            background-color: #1d1d1d;
+            color: #ffffff;
+            cursor: pointer;
+            font-size: 0.875rem;
+          }
+
+          .action-button:hover {
+            background-color: #3d3d3d;
+          }
+
+          .action-button.create {
+            border-color: #4a9eff;
+            color: #4a9eff;
+          }
+
+          .action-button.create:hover {
+            background-color: #4a9eff;
+            color: #ffffff;
+          }
+
+          .action-button.delete {
+            border-color: #ff4a4a;
+            color: #ff4a4a;
+          }
+
+          .action-button.delete:hover {
+            background-color: #ff4a4a;
+            color: #ffffff;
+          }
+
+          .playlist-create-form {
+            display: flex;
+            gap: 0.5rem;
+            padding: 0 1rem 1rem;
+            border-bottom: 1px solid #3d3d3d;
+          }
+
+          .playlist-create-form input {
+            flex: 1;
+            padding: 0.5rem;
+            background-color: #1d1d1d;
+            border: 1px solid #3d3d3d;
+            border-radius: 4px;
+            color: #ffffff;
+            font-size: 0.875rem;
+          }
+
+          .playlist-create-form button {
+            padding: 0.5rem 1rem;
+            background-color: #4a9eff;
+            border: none;
+            border-radius: 4px;
+            color: #ffffff;
+            cursor: pointer;
+            font-size: 0.875rem;
+          }
+
+          .playlist-create-form button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+          }
+
+          .playlist-drop-zone {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            position: relative;
+          }
+
+          .playlist-drop-zone.drag-over {
+            background-color: rgba(74, 158, 255, 0.1);
+            border: 2px dashed #4a9eff;
+          }
+
+          .playlist-drop-zone.disabled {
+            opacity: 0.5;
+            pointer-events: none;
+          }
+
+          .playlist-drop-zone p {
+            text-align: center;
+            color: #888888;
+            margin-top: 2rem;
+          }
+
+          .playlist-entry-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+          }
+        `}</style>
+      </div>
+    </>
+  );
+};
+
+export default PlaylistPanel;

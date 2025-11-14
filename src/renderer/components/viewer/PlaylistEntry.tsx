@@ -1,0 +1,168 @@
+import React from 'react';
+import { PlaylistEntry as PlaylistEntryType } from '@shared/types/playlist';
+
+interface PlaylistEntryProps {
+  entry: PlaylistEntryType;
+  isActive: boolean;
+  onClick: () => void;
+  onRemove: () => void;
+}
+
+const PlaylistEntry: React.FC<PlaylistEntryProps> = ({ entry, isActive, onClick, onRemove }) => {
+  const handleRemoveClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onRemove();
+  };
+
+  const entryClasses = ['playlist-entry', isActive ? 'active' : ''].filter(Boolean).join(' ');
+
+  return (
+    <div className={entryClasses} onClick={onClick}>
+      <div className="entry-thumbnail">
+        {entry.thumbnail_path ? (
+          <img src={entry.thumbnail_path} alt={entry.label} />
+        ) : (
+          <div className="thumbnail-placeholder">
+            {entry.source_type === 'folder' ? '📁' : '📦'}
+          </div>
+        )}
+      </div>
+
+      <div className="entry-info">
+        <div className="entry-label" title={entry.source_path}>
+          {entry.label}
+        </div>
+        <div className="entry-meta">
+          <span className={`source-badge ${entry.source_type}`}>
+            {entry.source_type === 'folder' ? 'Folder' : 'Archive'}
+          </span>
+          <span className="entry-position">#{entry.position + 1}</span>
+        </div>
+      </div>
+
+      <button
+        className="remove-button"
+        onClick={handleRemoveClick}
+        title="Remove from playlist"
+      >
+        ✕
+      </button>
+
+      <style>{`
+        .playlist-entry {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 0.75rem;
+          background-color: #1d1d1d;
+          border: 1px solid #3d3d3d;
+          border-radius: 4px;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .playlist-entry:hover {
+          background-color: #2d2d2d;
+          border-color: #4d4d4d;
+        }
+
+        .playlist-entry.active {
+          background-color: #3d3d3d;
+          border-color: #4a9eff;
+          box-shadow: 0 0 0 1px #4a9eff;
+        }
+
+        .entry-thumbnail {
+          width: 48px;
+          height: 48px;
+          flex-shrink: 0;
+          border-radius: 4px;
+          overflow: hidden;
+          background-color: #0d0d0d;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .entry-thumbnail img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .thumbnail-placeholder {
+          font-size: 1.5rem;
+          opacity: 0.5;
+        }
+
+        .entry-info {
+          flex: 1;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 0.25rem;
+        }
+
+        .entry-label {
+          color: #ffffff;
+          font-size: 0.875rem;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .entry-meta {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          font-size: 0.75rem;
+        }
+
+        .source-badge {
+          padding: 0.125rem 0.5rem;
+          border-radius: 3px;
+          font-size: 0.625rem;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .source-badge.folder {
+          background-color: rgba(74, 158, 255, 0.2);
+          color: #4a9eff;
+        }
+
+        .source-badge.archive {
+          background-color: rgba(255, 158, 74, 0.2);
+          color: #ff9e4a;
+        }
+
+        .entry-position {
+          color: #888888;
+        }
+
+        .remove-button {
+          flex-shrink: 0;
+          width: 24px;
+          height: 24px;
+          background: none;
+          border: none;
+          color: #888888;
+          cursor: pointer;
+          font-size: 1rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 4px;
+          transition: all 0.2s;
+        }
+
+        .remove-button:hover {
+          background-color: rgba(255, 74, 74, 0.2);
+          color: #ff4a4a;
+        }
+      `}</style>
+    </div>
+  );
+};
+
+export default PlaylistEntry;
