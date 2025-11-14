@@ -8,12 +8,14 @@
 export const ARCHIVE_OPEN = 'archive:open';
 export const ARCHIVE_CLOSE = 'archive:close';
 export const ARCHIVE_LIST_IMAGES = 'archive:list-images';
+export const ARCHIVE_SCAN_CANCEL = 'archive:scan-cancel';
 export const FOLDER_OPEN = 'folder:open';
 export const FOLDER_SCAN_CANCEL = 'folder:scan-cancel';
 
 // Scan events (main → renderer)
 export const FOLDER_SCAN_PROGRESS = 'folder:scan-progress';
 export const FOLDER_SCAN_COMPLETE = 'folder:scan-complete';
+export const ARCHIVE_SCAN_COMPLETE = 'archive:scan-complete';
 
 // Image operations
 export const IMAGE_LOAD = 'image:load';

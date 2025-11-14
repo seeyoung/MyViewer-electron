@@ -23,7 +23,8 @@ export function useArchive() {
 
   // Set up scan event listeners
   useEffect(() => {
-    const unsubscribeProgress = ipcClient.onScanProgress((event) => {
+    // Folder scan listeners
+    const unsubscribeFolderProgress = ipcClient.onFolderScanProgress((event) => {
       setScanStatus(ScanStatus.SCANNING);
       setScanProgress({
         discovered: event.discovered,
@@ -38,15 +39,39 @@ export function useArchive() {
       }
     });
 
-    const unsubscribeComplete = ipcClient.onScanComplete((event) => {
+    const unsubscribeFolderComplete = ipcClient.onFolderScanComplete((event) => {
       setScanStatus(ScanStatus.COMPLETED);
       setScanProgress(null);
-      console.log(`✅ Scan completed: ${event.totalImages} images in ${event.duration}ms`);
+      console.log(`✅ Folder scan completed: ${event.totalImages} images in ${event.duration}ms`);
+    });
+
+    // Archive scan listeners
+    const unsubscribeArchiveProgress = ipcClient.onArchiveScanProgress((event) => {
+      setScanStatus(ScanStatus.SCANNING);
+      setScanProgress({
+        discovered: event.discovered,
+        processed: event.processed,
+        currentPath: event.currentPath,
+        percentage: Math.round((event.processed / event.discovered) * 100),
+      });
+
+      // Add new images as they're discovered
+      if (event.imageChunk && event.imageChunk.length > 0) {
+        addImageChunk(event.imageChunk);
+      }
+    });
+
+    const unsubscribeArchiveComplete = ipcClient.onArchiveScanComplete((event) => {
+      setScanStatus(ScanStatus.COMPLETED);
+      setScanProgress(null);
+      console.log(`✅ Archive scan completed: ${event.totalImages} images in ${event.duration}ms`);
     });
 
     return () => {
-      unsubscribeProgress();
-      unsubscribeComplete();
+      unsubscribeFolderProgress();
+      unsubscribeFolderComplete();
+      unsubscribeArchiveProgress();
+      unsubscribeArchiveComplete();
     };
   }, [setScanStatus, setScanProgress, addImageChunk]);
 
@@ -61,54 +86,56 @@ export function useArchive() {
         password,
       });
 
-      const { archive, session, images } = result;
-
-      console.log('📦 Archive opened successfully:', {
-        archiveId: archive.id,
-        fileName: archive.fileName,
-        imageCount: images.length,
-        firstImage: images[0] ? {
-          id: images[0].id,
-          pathInArchive: images[0].pathInArchive,
-          archiveId: images[0].archiveId
-        } : null
-      });
+      const { source, session, initialImages, scanToken, estimatedTotal, isComplete } = result;
 
       // Update store
-      setSource({
-        id: archive.id,
-        type: SourceType.ARCHIVE,
-        path: archive.filePath,
-        label: archive.fileName,
-      });
-      loadFolderPositions(archive.filePath);
-      setImages(images);
+      setSource(source);
+      loadFolderPositions(source.path);
+      setImages(initialImages);
       setSession(session);
-      const descriptor = {
-        id: archive.id,
-        type: SourceType.ARCHIVE,
-        path: archive.filePath,
-        label: archive.fileName,
-      } as const;
-      addRecentSource(descriptor);
-      ipcClient.invoke(channels.RECENT_SOURCES_ADD, descriptor).catch((error) => {
+      addRecentSource(source);
+      ipcClient.invoke(channels.RECENT_SOURCES_ADD, source).catch((error) => {
         console.error('Failed to persist recent source', error);
       });
+
+      // Set scan state
+      setScanToken(scanToken);
+      setEstimatedTotal(estimatedTotal);
+      setScanStatus(isComplete ? ScanStatus.COMPLETED : ScanStatus.SCANNING);
 
       // Navigate to last viewed page (auto-resume)
       if (session && session.currentPageIndex !== undefined) {
         navigateToPage(session.currentPageIndex);
       }
 
-      return archive;
+      console.log('📦 Archive opened:', {
+        path: filePath,
+        initialImages: initialImages.length,
+        isComplete,
+        scanToken,
+      });
+
+      return source;
     } catch (error: any) {
       const errorMessage = error?.message || 'Failed to open archive';
       setError(errorMessage);
+      setScanStatus(ScanStatus.FAILED);
       throw error;
     } finally {
       setIsOpening(false);
     }
-  }, [setSource, setImages, setError, navigateToPage, setSession, addRecentSource, loadFolderPositions]);
+  }, [
+    setSource,
+    setImages,
+    setError,
+    navigateToPage,
+    setSession,
+    addRecentSource,
+    loadFolderPositions,
+    setScanToken,
+    setEstimatedTotal,
+    setScanStatus,
+  ]);
 
   const openFolder = useCallback(async (folderPath: string) => {
     setIsOpening(true);

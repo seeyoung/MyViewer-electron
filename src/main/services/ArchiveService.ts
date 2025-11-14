@@ -8,17 +8,33 @@ import { RarReaderJS } from './archive/RarReaderJS';
 import { detectFormatFromExtension, isSupportedImageFormat } from '@lib/image-utils';
 import { sanitizePath, getParentPath, splitPath } from '@lib/file-utils';
 import { naturalSortBy } from '@lib/natural-sort';
+import { EventEmitter } from 'events';
+import {
+  FolderOpenInitialResponse,
+  ScanProgressEvent,
+  ScanCompleteEvent,
+} from '@shared/types/Scan';
+import { SourceDescriptor, SourceType } from '@shared/types/Source';
 // CommonJS와 호환되도록 uuid 대신 crypto 사용
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 
+const INITIAL_SCAN_LIMIT = 100;
+const CHUNK_SIZE = 100;
+const CHUNK_DELAY_MS = 10;
+
 /**
  * Archive Service
  * Manages archive operations: open, close, list entries, extract
  */
-export class ArchiveService {
+export class ArchiveService extends EventEmitter {
   private openArchives: Map<string, { archive: Archive; reader: ArchiveReader }> = new Map();
+  private activeScans = new Map<string, AbortController>();
+
+  constructor() {
+    super();
+  }
 
   /**
    * Detect archive format from file extension
@@ -327,5 +343,208 @@ export class ArchiveService {
    */
   getArchive(archiveId: string): Archive | undefined {
     return this.openArchives.get(archiveId)?.archive;
+  }
+
+  /**
+   * Open archive with progressive scanning
+   * Returns initial images immediately and processes rest in background
+   */
+  async openArchiveProgressive(filePath: string, password?: string): Promise<FolderOpenInitialResponse> {
+    // Verify file exists
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`Archive file not found: ${filePath}`);
+    }
+
+    // Detect format
+    const format = this.detectArchiveFormat(filePath);
+    if (!format) {
+      throw new Error('Unsupported archive format');
+    }
+
+    // Get reader
+    const reader = this.getReader(format);
+
+    // Open archive
+    try {
+      await reader.open(filePath, password);
+    } catch (error) {
+      throw new Error(`Failed to open archive: ${error}`);
+    }
+
+    const isPasswordProtected = await reader.isPasswordProtected();
+    const entries = await reader.listEntries();
+
+    // Filter for images
+    const imageEntries = entries.filter(
+      entry => !entry.isDirectory && isSupportedImageFormat(entry.path)
+    );
+
+    const scanToken = randomUUID();
+    const archiveId = randomUUID();
+    const fileName = path.basename(filePath);
+
+    // Process only initial images
+    const initialEntries = imageEntries.slice(0, INITIAL_SCAN_LIMIT);
+    const initialImages: Image[] = initialEntries.map((entry, index) => {
+      const sanitizedPath = sanitizePath(entry.path);
+      return {
+        id: randomUUID(),
+        archiveId,
+        pathInArchive: sanitizedPath,
+        fileName: path.basename(sanitizedPath),
+        folderPath: getParentPath(sanitizedPath) || '/',
+        format: detectFormatFromExtension(entry.path),
+        fileSize: entry.compressedSize,
+        dimensions: undefined,
+        globalIndex: index,
+        folderIndex: 0,
+        isLoaded: false,
+        isCorrupted: false,
+      };
+    });
+
+    const sortedInitialImages = naturalSortBy(initialImages, 'pathInArchive');
+    sortedInitialImages.forEach((img, idx) => {
+      img.globalIndex = idx;
+    });
+
+    const rootFolder = this.buildFolderTree(sortedInitialImages, archiveId);
+
+    const source: SourceDescriptor = {
+      id: archiveId,
+      type: SourceType.ARCHIVE,
+      path: filePath,
+      label: fileName,
+    };
+
+    // Create archive object
+    const archive: Archive = {
+      id: archiveId,
+      filePath,
+      fileName,
+      format,
+      fileSize: fs.statSync(filePath).size,
+      isPasswordProtected,
+      totalImageCount: imageEntries.length,
+      totalFileCount: entries.length,
+      rootFolder,
+      isOpen: true,
+      openedAt: Date.now(),
+      lastAccessedAt: Date.now(),
+    };
+
+    // Store in cache
+    this.openArchives.set(archiveId, { archive, reader });
+
+    const isComplete = imageEntries.length <= INITIAL_SCAN_LIMIT;
+
+    if (!isComplete) {
+      // Start background processing
+      this.startBackgroundArchiveScan(imageEntries, scanToken, archiveId).catch(err => {
+        console.error('Background archive scan error:', err);
+        this.emit('scan-error', { token: scanToken, error: err.message });
+      });
+    }
+
+    return {
+      source,
+      initialImages: sortedInitialImages,
+      rootFolder,
+      scanToken,
+      estimatedTotal: imageEntries.length,
+      isComplete,
+    };
+  }
+
+  /**
+   * Process remaining archive entries in background
+   */
+  private async startBackgroundArchiveScan(
+    allEntries: any[],
+    token: string,
+    archiveId: string
+  ): Promise<void> {
+    const controller = new AbortController();
+    this.activeScans.set(token, controller);
+
+    const startTime = Date.now();
+    const remainingEntries = allEntries.slice(INITIAL_SCAN_LIMIT);
+    let processed = INITIAL_SCAN_LIMIT;
+
+    try {
+      for (let i = 0; i < remainingEntries.length; i += CHUNK_SIZE) {
+        if (controller.signal.aborted) break;
+
+        const chunk = remainingEntries.slice(i, i + CHUNK_SIZE);
+        const chunkImages: Image[] = chunk.map((entry, idx) => {
+          const sanitizedPath = sanitizePath(entry.path);
+          return {
+            id: randomUUID(),
+            archiveId,
+            pathInArchive: sanitizedPath,
+            fileName: path.basename(sanitizedPath),
+            folderPath: getParentPath(sanitizedPath) || '/',
+            format: detectFormatFromExtension(entry.path),
+            fileSize: entry.compressedSize,
+            dimensions: undefined,
+            globalIndex: processed + idx,
+            folderIndex: 0,
+            isLoaded: false,
+            isCorrupted: false,
+          };
+        });
+
+        processed += chunk.length;
+
+        // Emit progress
+        if (!controller.signal.aborted) {
+          const progressEvent: ScanProgressEvent = {
+            token,
+            discovered: allEntries.length,
+            processed,
+            currentPath: chunk[chunk.length - 1]?.path || '',
+            imageChunk: chunkImages,
+          };
+          this.emit('scan-progress', progressEvent);
+        }
+
+        // Throttle
+        await new Promise(resolve => setTimeout(resolve, CHUNK_DELAY_MS));
+      }
+
+      // Emit complete
+      if (!controller.signal.aborted) {
+        const completeEvent: ScanCompleteEvent = {
+          token,
+          totalImages: allEntries.length,
+          totalFolders: 1, // Archive has one root
+          duration: Date.now() - startTime,
+        };
+        this.emit('scan-complete', completeEvent);
+      }
+    } finally {
+      this.activeScans.delete(token);
+    }
+  }
+
+  /**
+   * Cancel an active scan
+   */
+  async cancelScan(token: string): Promise<boolean> {
+    const controller = this.activeScans.get(token);
+    if (!controller) {
+      return false;
+    }
+
+    controller.abort();
+    this.activeScans.delete(token);
+    return true;
+  }
+
+  /**
+   * Check if scan is active
+   */
+  isScanActive(token: string): boolean {
+    return this.activeScans.has(token);
   }
 }
