@@ -6,6 +6,7 @@ interface PlaylistEntryProps {
   isActive: boolean;
   onClick: () => void;
   onRemove: () => void;
+  onUpdateLabel?: (position: number, newLabel: string) => void;
   onDragStart?: (position: number) => void;
   onDragOver?: (position: number) => void;
   onDrop?: (position: number) => void;
@@ -16,19 +17,44 @@ const PlaylistEntry: React.FC<PlaylistEntryProps> = ({
   isActive,
   onClick,
   onRemove,
+  onUpdateLabel,
   onDragStart,
   onDragOver,
   onDrop
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingLabel, setEditingLabel] = useState('');
 
   const handleRemoveClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onRemove();
   };
 
+  const handleLabelDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onUpdateLabel) {
+      setEditingLabel(entry.label);
+      setIsEditing(true);
+    }
+  };
+
+  const handleSaveLabel = () => {
+    if (editingLabel.trim() && onUpdateLabel) {
+      onUpdateLabel(entry.position, editingLabel.trim());
+    }
+    setIsEditing(false);
+    setEditingLabel('');
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditingLabel('');
+  };
+
   const handleDragStart = (e: React.DragEvent) => {
+    if (isEditing) return; // Prevent drag while editing
     e.stopPropagation();
     setIsDragging(true);
     e.dataTransfer.effectAllowed = 'move';
@@ -88,9 +114,31 @@ const PlaylistEntry: React.FC<PlaylistEntryProps> = ({
       </div>
 
       <div className="entry-info">
-        <div className="entry-label" title={entry.source_path}>
-          {entry.label}
-        </div>
+        {isEditing ? (
+          <input
+            className="entry-label-edit"
+            type="text"
+            value={editingLabel}
+            onChange={(e) => setEditingLabel(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.stopPropagation();
+                handleSaveLabel();
+              }
+              if (e.key === 'Escape') {
+                e.stopPropagation();
+                handleCancelEdit();
+              }
+            }}
+            onBlur={handleSaveLabel}
+            onClick={(e) => e.stopPropagation()}
+            autoFocus
+          />
+        ) : (
+          <div className="entry-label" title={entry.source_path} onDoubleClick={handleLabelDoubleClick}>
+            {entry.label}
+          </div>
+        )}
         <div className="entry-meta">
           <span className={`source-badge ${entry.source_type}`}>
             {entry.source_type === 'folder' ? 'Folder' : 'Archive'}

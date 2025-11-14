@@ -16,13 +16,22 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
   const activePlaylist = useViewerStore(state => state.activePlaylist);
   const playlistEntries = useViewerStore(state => state.playlistEntries);
   const currentEntryIndex = useViewerStore(state => state.currentEntryIndex);
+  const isPlaylistMode = useViewerStore(state => state.isPlaylistMode);
+  const autoAdvanceToNextEntry = useViewerStore(state => state.autoAdvanceToNextEntry);
+  const playlistLoopMode = useViewerStore(state => state.playlistLoopMode);
   const setPlaylists = useViewerStore(state => state.setPlaylists);
   const setActivePlaylist = useViewerStore(state => state.setActivePlaylist);
   const setPlaylistEntries = useViewerStore(state => state.setPlaylistEntries);
+  const setCurrentEntryIndex = useViewerStore(state => state.setCurrentEntryIndex);
+  const togglePlaylistMode = useViewerStore(state => state.togglePlaylistMode);
+  const toggleAutoAdvance = useViewerStore(state => state.toggleAutoAdvance);
+  const setPlaylistLoopMode = useViewerStore(state => state.setPlaylistLoopMode);
   const goToEntryByIndex = useViewerStore(state => state.goToEntryByIndex);
 
   const [isCreating, setIsCreating] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingName, setEditingName] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [draggedPosition, setDraggedPosition] = useState<number | null>(null);
 
@@ -32,15 +41,38 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
     restorePlaybackState();
   }, []);
 
-  // Restore active playlist from DB after playlists are loaded
+  // Restore full playback state from DB after playlists are loaded
   const restorePlaybackState = async () => {
     try {
       const state = await window.electronAPI.invoke(channels.PLAYLIST_GET_PLAYBACK_STATE);
-      if (state?.activePlaylistId && playlists.length > 0) {
+      if (!state) return;
+
+      // Restore active playlist
+      if (state.activePlaylistId && playlists.length > 0) {
         const playlist = playlists.find(p => p.id === state.activePlaylistId);
         if (playlist) {
           setActivePlaylist(playlist);
         }
+      }
+
+      // Restore current entry index
+      if (state.currentEntryIndex !== undefined && state.currentEntryIndex >= 0) {
+        setCurrentEntryIndex(state.currentEntryIndex);
+      }
+
+      // Restore playlist mode
+      if (state.isPlaying !== undefined && state.isPlaying !== isPlaylistMode) {
+        togglePlaylistMode();
+      }
+
+      // Restore auto-advance setting
+      if (state.autoAdvanceToNextEntry !== undefined && state.autoAdvanceToNextEntry !== autoAdvanceToNextEntry) {
+        toggleAutoAdvance();
+      }
+
+      // Restore loop mode
+      if (state.loopMode) {
+        setPlaylistLoopMode(state.loopMode);
       }
     } catch (error) {
       console.error('Failed to restore playback state:', error);
@@ -67,10 +99,21 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
     }
   }, [activePlaylist?.id]);
 
+  // Save playback state whenever it changes
+  useEffect(() => {
+    if (playlists.length > 0) {
+      savePlaybackState();
+    }
+  }, [currentEntryIndex, isPlaylistMode, autoAdvanceToNextEntry, playlistLoopMode]);
+
   const savePlaybackState = async () => {
     try {
       await window.electronAPI.invoke(channels.PLAYLIST_UPDATE_PLAYBACK_STATE, {
         activePlaylistId: activePlaylist?.id || null,
+        currentEntryIndex: currentEntryIndex,
+        isPlaying: isPlaylistMode,
+        autoAdvanceToNextEntry: autoAdvanceToNextEntry,
+        loopMode: playlistLoopMode,
       });
     } catch (error) {
       console.error('Failed to save playback state:', error);
@@ -132,6 +175,39 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
     }
   };
 
+  const handleStartEdit = () => {
+    if (!activePlaylist) return;
+    setEditingName(activePlaylist.name);
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!activePlaylist || !editingName.trim()) return;
+
+    try {
+      await window.electronAPI.invoke(channels.PLAYLIST_UPDATE, {
+        id: activePlaylist.id,
+        name: editingName.trim(),
+      });
+      await loadPlaylists();
+      // Update active playlist reference
+      const updated = playlists.find(p => p.id === activePlaylist.id);
+      if (updated) {
+        setActivePlaylist(updated);
+      }
+      setIsEditing(false);
+      setEditingName('');
+    } catch (error) {
+      console.error('Failed to update playlist:', error);
+      alert('Failed to update playlist: ' + (error as Error).message);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditingName('');
+  };
+
   const handlePlaylistSelect = (playlistId: string) => {
     const playlist = playlists.find(p => p.id === playlistId);
     setActivePlaylist(playlist || null);
@@ -163,6 +239,30 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
     }
   };
 
+  const handleClearAllEntries = async () => {
+    if (!activePlaylist || playlistEntries.length === 0) return;
+
+    const confirmed = confirm(
+      `Remove all ${playlistEntries.length} ${playlistEntries.length === 1 ? 'entry' : 'entries'} from "${activePlaylist.name}"?\n\nThis action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    try {
+      // Remove all entries starting from the end to avoid position shifting issues
+      for (let i = playlistEntries.length - 1; i >= 0; i--) {
+        await window.electronAPI.invoke(channels.PLAYLIST_REMOVE_ENTRY, {
+          playlistId: activePlaylist.id,
+          position: i,
+        });
+      }
+      await loadPlaylistEntries(activePlaylist.id);
+      alert('All entries have been removed.');
+    } catch (error) {
+      console.error('Failed to clear all entries:', error);
+      alert('Failed to clear all entries: ' + (error as Error).message);
+    }
+  };
+
   const handleRemoveEntry = async (position: number) => {
     if (!activePlaylist) return;
 
@@ -184,6 +284,22 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
     } catch (error) {
       console.error('Failed to remove entry:', error);
       alert('Failed to remove entry: ' + (error as Error).message);
+    }
+  };
+
+  const handleUpdateEntryLabel = async (position: number, newLabel: string) => {
+    if (!activePlaylist) return;
+
+    try {
+      await window.electronAPI.invoke(channels.PLAYLIST_UPDATE_ENTRY, {
+        playlistId: activePlaylist.id,
+        position,
+        updates: { label: newLabel },
+      });
+      await loadPlaylistEntries(activePlaylist.id);
+    } catch (error) {
+      console.error('Failed to update entry label:', error);
+      alert('Failed to update entry label: ' + (error as Error).message);
     }
   };
 
@@ -308,17 +424,29 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
               className="action-button create"
               onClick={() => setIsCreating(!isCreating)}
               title="Create new playlist"
+              disabled={isEditing}
             >
               {isCreating ? 'Cancel' : '+ New'}
             </button>
             {activePlaylist && (
-              <button
-                className="action-button delete"
-                onClick={handleDeletePlaylist}
-                title="Delete current playlist"
-              >
-                Delete
-              </button>
+              <>
+                <button
+                  className="action-button edit"
+                  onClick={isEditing ? handleCancelEdit : handleStartEdit}
+                  title={isEditing ? "Cancel editing" : "Edit playlist name"}
+                  disabled={isCreating}
+                >
+                  {isEditing ? 'Cancel' : 'Edit'}
+                </button>
+                <button
+                  className="action-button delete"
+                  onClick={handleDeletePlaylist}
+                  title="Delete current playlist"
+                  disabled={isCreating || isEditing}
+                >
+                  Delete
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -342,7 +470,31 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
           </div>
         )}
 
-        {activePlaylist && <PlaylistControls onCleanupInvalid={handleCleanupInvalidEntries} />}
+        {isEditing && activePlaylist && (
+          <div className="playlist-edit-form">
+            <input
+              type="text"
+              placeholder="Playlist name"
+              value={editingName}
+              onChange={(e) => setEditingName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSaveEdit();
+                if (e.key === 'Escape') handleCancelEdit();
+              }}
+              autoFocus
+            />
+            <button onClick={handleSaveEdit} disabled={!editingName.trim()}>
+              Save
+            </button>
+          </div>
+        )}
+
+        {activePlaylist && (
+          <PlaylistControls
+            onCleanupInvalid={handleCleanupInvalidEntries}
+            onClearAll={handleClearAllEntries}
+          />
+        )}
 
         <div
           className={`playlist-drop-zone ${isDragOver ? 'drag-over' : ''} ${!activePlaylist ? 'disabled' : ''}`}
@@ -363,6 +515,7 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
                   isActive={index === currentEntryIndex}
                   onClick={() => handleEntryClick(entry.position)}
                   onRemove={() => handleRemoveEntry(entry.position)}
+                  onUpdateLabel={handleUpdateEntryLabel}
                   onDragStart={handleEntryDragStart}
                   onDrop={handleEntryDrop}
                 />

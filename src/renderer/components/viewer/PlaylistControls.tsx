@@ -3,9 +3,10 @@ import { useViewerStore } from '../../store/viewerStore';
 
 interface PlaylistControlsProps {
   onCleanupInvalid?: () => void;
+  onClearAll?: () => void;
 }
 
-const PlaylistControls: React.FC<PlaylistControlsProps> = ({ onCleanupInvalid }) => {
+const PlaylistControls: React.FC<PlaylistControlsProps> = ({ onCleanupInvalid, onClearAll }) => {
   const isPlaylistMode = useViewerStore(state => state.isPlaylistMode);
   const autoAdvanceToNextEntry = useViewerStore(state => state.autoAdvanceToNextEntry);
   const playlistLoopMode = useViewerStore(state => state.playlistLoopMode);
@@ -97,6 +98,19 @@ const PlaylistControls: React.FC<PlaylistControlsProps> = ({ onCleanupInvalid })
             title="Remove entries that point to non-existent files/folders"
           >
             🧹 Cleanup Invalid
+          </button>
+        </div>
+      )}
+
+      {onClearAll && (
+        <div className="control-section">
+          <button
+            className="clear-all-button"
+            onClick={onClearAll}
+            disabled={!hasEntries}
+            title="Remove all entries from this playlist"
+          >
+            🗑️ Clear All Entries
           </button>
         </div>
       )}
@@ -219,6 +233,28 @@ const PlaylistControls: React.FC<PlaylistControlsProps> = ({ onCleanupInvalid })
         }
 
         .cleanup-button:disabled {
+          opacity: 0.3;
+          cursor: not-allowed;
+        }
+
+        .clear-all-button {
+          width: 100%;
+          padding: 0.5rem;
+          background-color: #1d1d1d;
+          border: 1px solid #ff4a4a;
+          border-radius: 4px;
+          color: #ff4a4a;
+          cursor: pointer;
+          font-size: 0.875rem;
+          transition: all 0.2s;
+        }
+
+        .clear-all-button:hover:not(:disabled) {
+          background-color: #ff4a4a;
+          color: #1d1d1d;
+        }
+
+        .clear-all-button:disabled {
           opacity: 0.3;
           cursor: not-allowed;
         }

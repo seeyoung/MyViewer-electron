@@ -1,4 +1,6 @@
 import { PlaylistRepository } from '../repositories/PlaylistRepository';
+import { ArchiveService } from './ArchiveService';
+import { FolderService } from './FolderService';
 import {
   Playlist,
   PlaylistEntry,
@@ -16,9 +18,17 @@ import { constants as fsConstants } from 'fs';
  */
 export class PlaylistService {
   private repository: PlaylistRepository;
+  private archiveService: ArchiveService;
+  private folderService: FolderService;
 
-  constructor(repository: PlaylistRepository) {
+  constructor(
+    repository: PlaylistRepository,
+    archiveService: ArchiveService,
+    folderService: FolderService
+  ) {
     this.repository = repository;
+    this.archiveService = archiveService;
+    this.folderService = folderService;
   }
 
   /**

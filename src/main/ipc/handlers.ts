@@ -79,7 +79,7 @@ const folderService = new FolderService();
 const recentSourcesService = new RecentSourcesService();
 const thumbnailService = new ThumbnailService(imageService, folderService);
 const playlistRepository = new PlaylistRepository();
-const playlistService = new PlaylistService(playlistRepository);
+const playlistService = new PlaylistService(playlistRepository, archiveService, folderService);
 
 /**
  * Initialize all IPC handlers
