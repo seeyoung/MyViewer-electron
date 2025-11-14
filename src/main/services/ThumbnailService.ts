@@ -34,11 +34,128 @@ export class ThumbnailService {
     quality: 65,
   };
 
+  // Cache management properties
+  private readonly maxCacheSize: number = 500 * 1024 * 1024; // 500MB
+  private readonly maxCacheAge: number = 30 * 24 * 60 * 60 * 1000; // 30 days
+  private cacheStats: Map<string, { size: number; accessTime: number }> = new Map();
+
   constructor(
     private readonly imageService: ImageService,
     private readonly folderService: FolderService
   ) {
     this.cacheDir = path.join(app.getPath('userData'), 'thumbnail-cache');
+    this.initializeCacheManagement();
+  }
+
+  private async initializeCacheManagement(): Promise<void> {
+    // Load cache stats on startup
+    await this.loadCacheStats();
+
+    // Clean up old cache
+    await this.cleanupOldCache();
+
+    // Schedule periodic cleanup (every hour)
+    setInterval(() => this.cleanupOldCache(), 60 * 60 * 1000);
+  }
+
+  private async loadCacheStats(): Promise<void> {
+    try {
+      const files = await fs.readdir(this.cacheDir);
+
+      for (const file of files) {
+        const filePath = path.join(this.cacheDir, file);
+        const stats = await fs.stat(filePath);
+
+        this.cacheStats.set(file, {
+          size: stats.size,
+          accessTime: stats.atimeMs,
+        });
+      }
+    } catch (error) {
+      // Ignore if cache directory doesn't exist
+      if ((error as any).code !== 'ENOENT') {
+        console.error('Failed to load cache stats:', error);
+      }
+    }
+  }
+
+  private async cleanupOldCache(): Promise<void> {
+    const now = Date.now();
+    let totalSize = 0;
+    const entries: Array<{ file: string; size: number; accessTime: number }> = [];
+
+    // Collect cache statistics
+    for (const [file, stats] of this.cacheStats.entries()) {
+      totalSize += stats.size;
+      entries.push({ file, ...stats });
+    }
+
+    // Sort by LRU (oldest access time first)
+    entries.sort((a, b) => a.accessTime - b.accessTime);
+
+    // 1. Delete files older than maxCacheAge (30 days)
+    for (const entry of entries) {
+      if (now - entry.accessTime > this.maxCacheAge) {
+        await this.deleteCacheFile(entry.file);
+        totalSize -= entry.size;
+      }
+    }
+
+    // 2. Delete LRU files if size limit exceeded
+    if (totalSize > this.maxCacheSize) {
+      for (const entry of entries) {
+        if (totalSize <= this.maxCacheSize * 0.8) {
+          break; // Reduce to 80%
+        }
+
+        await this.deleteCacheFile(entry.file);
+        totalSize -= entry.size;
+      }
+    }
+  }
+
+  private async deleteCacheFile(filename: string): Promise<void> {
+    try {
+      const filePath = path.join(this.cacheDir, filename);
+      await fs.unlink(filePath);
+      this.cacheStats.delete(filename);
+    } catch (error) {
+      console.error(`Failed to delete cache file ${filename}:`, error);
+    }
+  }
+
+  private async updateCacheAccess(filename: string, filePath: string): Promise<void> {
+    const stats = this.cacheStats.get(filename);
+    if (stats) {
+      stats.accessTime = Date.now();
+
+      // Update file system access time
+      try {
+        const now = new Date();
+        await fs.utimes(filePath, now, now);
+      } catch (error) {
+        console.error('Failed to update file access time:', error);
+      }
+    }
+  }
+
+  // Cache statistics query method (for debugging/monitoring)
+  getCacheStats(): { totalSize: number; fileCount: number; oldestAccess: number } {
+    let totalSize = 0;
+    let oldestAccess = Date.now();
+
+    for (const stats of this.cacheStats.values()) {
+      totalSize += stats.size;
+      if (stats.accessTime < oldestAccess) {
+        oldestAccess = stats.accessTime;
+      }
+    }
+
+    return {
+      totalSize,
+      fileCount: this.cacheStats.size,
+      oldestAccess,
+    };
   }
 
   async getThumbnail(params: {
@@ -69,8 +186,11 @@ export class ThumbnailService {
   ): Promise<ThumbnailResponse> {
     await fs.mkdir(this.cacheDir, { recursive: true });
     const cachePath = this.getCachePath(cacheKey, options.format);
+    const cacheFilename = path.basename(cachePath);
 
     if (await this.fileExists(cachePath)) {
+      // Update cache access time
+      await this.updateCacheAccess(cacheFilename, cachePath);
       return this.buildPayloadFromCache(cachePath);
     }
 
@@ -88,6 +208,12 @@ export class ThumbnailService {
       .toBuffer({ resolveWithObject: true });
 
     await fs.writeFile(cachePath, data);
+
+    // Add new cache file statistics
+    this.cacheStats.set(cacheFilename, {
+      size: data.length,
+      accessTime: Date.now(),
+    });
 
     return {
       dataUrl: this.bufferToDataUrl(data, options.format),
