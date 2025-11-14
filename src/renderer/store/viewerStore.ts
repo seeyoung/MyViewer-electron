@@ -10,6 +10,7 @@ import {
   Rotation,
 } from '@shared/types/ViewingSession';
 import { ScanStatus, ScanProgress } from '@shared/types/Scan';
+import { Playlist, PlaylistEntry } from '@shared/types/playlist';
 
 interface ViewerState {
   // Source state
@@ -61,6 +62,16 @@ interface ViewerState {
   scanProgress: ScanProgress | null;
   estimatedTotal: number | undefined;
 
+  // Playlist state
+  playlists: Playlist[];
+  activePlaylist: Playlist | null;
+  playlistEntries: PlaylistEntry[];
+  currentEntryIndex: number;
+  isPlaylistMode: boolean;
+  autoAdvanceToNextEntry: boolean;
+  playlistLoopMode: 'none' | 'playlist' | 'entry';
+  showPlaylistPanel: boolean;
+
   // Actions
   setSource: (source: SourceDescriptor) => void;
   setSession: (session: ViewingSession | null) => void;
@@ -93,6 +104,19 @@ interface ViewerState {
   setEstimatedTotal: (total: number | undefined) => void;
   addImageChunk: (images: Image[]) => void;
   reset: () => void;
+
+  // Playlist actions
+  setPlaylists: (playlists: Playlist[]) => void;
+  setActivePlaylist: (playlist: Playlist | null) => void;
+  setPlaylistEntries: (entries: PlaylistEntry[]) => void;
+  setCurrentEntryIndex: (index: number) => void;
+  togglePlaylistMode: () => void;
+  toggleAutoAdvance: () => void;
+  setPlaylistLoopMode: (mode: 'none' | 'playlist' | 'entry') => void;
+  togglePlaylistPanel: () => void;
+  goToNextEntry: () => Promise<void>;
+  goToPrevEntry: () => Promise<void>;
+  goToEntryByIndex: (index: number) => Promise<void>;
 }
 
 const normalizeFolder = (folderPath?: string | null) => {
@@ -141,6 +165,16 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   scanToken: null,
   scanProgress: null,
   estimatedTotal: undefined,
+
+  // Playlist initial state
+  playlists: [],
+  activePlaylist: null,
+  playlistEntries: [],
+  currentEntryIndex: -1,
+  isPlaylistMode: false,
+  autoAdvanceToNextEntry: true,
+  playlistLoopMode: 'none',
+  showPlaylistPanel: false,
 
   // Actions
   setSource: (source) => set({ currentSource: source }),
@@ -266,6 +300,147 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       const uniqueNewImages = newImages.filter(img => !existingIds.has(img.id));
       return { images: [...state.images, ...uniqueNewImages] };
     }),
+
+  // Playlist actions
+  setPlaylists: (playlists) => set({ playlists }),
+
+  setActivePlaylist: (playlist) =>
+    set({
+      activePlaylist: playlist,
+      playlistEntries: [],
+      currentEntryIndex: -1,
+    }),
+
+  setPlaylistEntries: (entries) => set({ playlistEntries: entries }),
+
+  setCurrentEntryIndex: (index) => set({ currentEntryIndex: index }),
+
+  togglePlaylistMode: () =>
+    set((state) => ({ isPlaylistMode: !state.isPlaylistMode })),
+
+  toggleAutoAdvance: () =>
+    set((state) => ({ autoAdvanceToNextEntry: !state.autoAdvanceToNextEntry })),
+
+  setPlaylistLoopMode: (mode) => set({ playlistLoopMode: mode }),
+
+  togglePlaylistPanel: () =>
+    set((state) => ({ showPlaylistPanel: !state.showPlaylistPanel })),
+
+  goToNextEntry: async () => {
+    const state = get();
+    const { playlistEntries, currentEntryIndex, playlistLoopMode } = state;
+
+    if (playlistEntries.length === 0) {
+      return;
+    }
+
+    let nextIndex = currentEntryIndex + 1;
+
+    // Handle loop mode
+    if (nextIndex >= playlistEntries.length) {
+      if (playlistLoopMode === 'playlist') {
+        nextIndex = 0; // Loop to first entry
+      } else {
+        return; // Stop at last entry
+      }
+    }
+
+    const nextEntry = playlistEntries[nextIndex];
+    if (!nextEntry) {
+      return;
+    }
+
+    // Update entry index
+    set({ currentEntryIndex: nextIndex });
+
+    // Open the next source
+    const ipcClient = await import('../services/ipc');
+    const { useArchive } = await import('../hooks/useArchive');
+
+    try {
+      // Determine if it's a folder or archive and open appropriately
+      if (nextEntry.source_type === 'folder') {
+        // Open folder - will be handled by useArchive hook
+        console.log('Opening folder:', nextEntry.source_path);
+      } else {
+        // Open archive
+        console.log('Opening archive:', nextEntry.source_path);
+      }
+    } catch (error) {
+      console.error('Failed to open next playlist entry:', error);
+      set({ error: `Failed to open: ${nextEntry.label}` });
+    }
+  },
+
+  goToPrevEntry: async () => {
+    const state = get();
+    const { playlistEntries, currentEntryIndex, playlistLoopMode } = state;
+
+    if (playlistEntries.length === 0) {
+      return;
+    }
+
+    let prevIndex = currentEntryIndex - 1;
+
+    // Handle loop mode
+    if (prevIndex < 0) {
+      if (playlistLoopMode === 'playlist') {
+        prevIndex = playlistEntries.length - 1; // Loop to last entry
+      } else {
+        return; // Stop at first entry
+      }
+    }
+
+    const prevEntry = playlistEntries[prevIndex];
+    if (!prevEntry) {
+      return;
+    }
+
+    // Update entry index
+    set({ currentEntryIndex: prevIndex });
+
+    // Open the previous source
+    try {
+      if (prevEntry.source_type === 'folder') {
+        console.log('Opening folder:', prevEntry.source_path);
+      } else {
+        console.log('Opening archive:', prevEntry.source_path);
+      }
+    } catch (error) {
+      console.error('Failed to open previous playlist entry:', error);
+      set({ error: `Failed to open: ${prevEntry.label}` });
+    }
+  },
+
+  goToEntryByIndex: async (index) => {
+    const state = get();
+    const { playlistEntries } = state;
+
+    if (index < 0 || index >= playlistEntries.length) {
+      console.warn('Invalid playlist entry index:', index);
+      return;
+    }
+
+    const entry = playlistEntries[index];
+    if (!entry) {
+      return;
+    }
+
+    // Update entry index
+    set({ currentEntryIndex: index });
+
+    // Open the source
+    try {
+      if (entry.source_type === 'folder') {
+        console.log('Opening folder:', entry.source_path);
+      } else {
+        console.log('Opening archive:', entry.source_path);
+      }
+    } catch (error) {
+      console.error('Failed to open playlist entry:', error);
+      set({ error: `Failed to open: ${entry.label}` });
+    }
+  },
 
   reset: () =>
     set((state) => {
