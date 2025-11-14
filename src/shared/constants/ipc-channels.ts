@@ -12,6 +12,7 @@ export const FOLDER_OPEN = 'folder:open';
 
 // Image operations
 export const IMAGE_LOAD = 'image:load';
+export const IMAGE_GET_THUMBNAIL = 'image:get-thumbnail';
 export const IMAGE_GENERATE_THUMBNAIL = 'image:generate-thumbnail';
 export const IMAGE_GENERATE_THUMBNAILS_BATCH = 'image:generate-thumbnails-batch';
 

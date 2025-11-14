@@ -61,9 +61,11 @@ import { ImageService } from '../services/ImageService';
 import { SessionService } from '../services/SessionService';
 import { FolderService } from '../services/FolderService';
 import { RecentSourcesService } from '../services/RecentSourcesService';
+import { ThumbnailService } from '../services/ThumbnailService';
 import { withErrorHandling, IpcErrorCode, createIpcError } from './error-handler';
 import * as channels from '@shared/constants/ipc-channels';
 import { SourceDescriptor, SourceType } from '@shared/types/Source';
+import { Image } from '@shared/types/Image';
 import { detectFormatFromExtension } from '@lib/image-utils';
 import fs from 'fs/promises';
 
@@ -73,6 +75,7 @@ const imageService = new ImageService(archiveService);
 const sessionService = new SessionService();
 const folderService = new FolderService();
 const recentSourcesService = new RecentSourcesService();
+const thumbnailService = new ThumbnailService(imageService, folderService);
 
 /**
  * Initialize all IPC handlers
@@ -223,6 +226,33 @@ export function initializeIpcHandlers(): void {
       }
       const buffer = await imageService.loadImage(archiveId, image);
       return { data: buffer, format: image.format };
+    })
+  );
+
+  registry.register(
+    channels.IMAGE_GET_THUMBNAIL,
+    withErrorHandling(async (event, data: any) => {
+      const { archiveId, image, sourceType, maxWidth, maxHeight, format, quality } = data || {};
+
+      if (!archiveId || !image) {
+        throw createIpcError(IpcErrorCode.INVALID_ARGUMENT, 'archiveId and image are required');
+      }
+
+      const sanitizedFormat = format === 'jpeg' || format === 'webp' ? format : undefined;
+
+      const thumbnail = await thumbnailService.getThumbnail({
+        archiveId,
+        image: image as Image,
+        sourceType: (sourceType as SourceType) ?? SourceType.ARCHIVE,
+        options: {
+          maxWidth,
+          maxHeight,
+          format: sanitizedFormat,
+          quality,
+        },
+      });
+
+      return thumbnail;
     })
   );
 

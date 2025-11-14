@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useViewerStore } from '../../store/viewerStore';
 import { useImageNavigation } from '../../hooks/useImageNavigation';
 import { Image as ViewerImage } from '@shared/types/Image';
 import { SourceDescriptor, SourceType } from '@shared/types/Source';
+import { useInViewport } from '../../hooks/useInViewport';
+import { runThumbnailTask } from '../../utils/thumbnailRequestQueue';
 
 interface FolderNodeView {
   path: string;
@@ -254,23 +256,36 @@ interface ThumbnailItemProps {
   height: number;
 }
 
+interface ThumbnailPayload {
+  dataUrl: string;
+}
+
 const ThumbnailItem: React.FC<ThumbnailItemProps> = ({ image, source, onSelect, height }) => {
-  const [dataUrl, setDataUrl] = useState<string | null>(null);
+  const [thumbnail, setThumbnail] = useState<ThumbnailPayload | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const itemRef = useRef<HTMLButtonElement | null>(null);
+  const isVisible = useInViewport(itemRef, { rootMargin: '64px 0px', threshold: 0, freezeOnceVisible: true });
 
   useEffect(() => {
     let cancelled = false;
+    if (!isVisible) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
     const load = async () => {
       setLoading(true);
       try {
-        const result: any = await window.electronAPI.invoke('image:load', {
-          archiveId: image.archiveId,
-          imagePath: image.pathInArchive,
-          encoding: 'base64',
-          sourceType: source?.type ?? SourceType.ARCHIVE,
-        });
-        if (!cancelled && result?.data && result?.format) {
-          setDataUrl(`data:image/${result.format};base64,${result.data}`);
+        const response: any = await runThumbnailTask(() =>
+          window.electronAPI.invoke('image:get-thumbnail', {
+            archiveId: image.archiveId,
+            image,
+            sourceType: source?.type ?? SourceType.ARCHIVE,
+          }) as Promise<any>
+        );
+        if (!cancelled && response?.dataUrl) {
+          setThumbnail({ dataUrl: response.dataUrl as string });
         }
       } catch (error) {
         console.error('Failed to load thumbnail', error);
@@ -285,12 +300,12 @@ const ThumbnailItem: React.FC<ThumbnailItemProps> = ({ image, source, onSelect, 
     return () => {
       cancelled = true;
     };
-  }, [image.id, image.pathInArchive, source?.id, source?.type]);
+  }, [image.archiveId, image, isVisible, source?.type]);
 
   return (
-    <button className="thumbnail-item" onClick={onSelect} title={image.pathInArchive} style={{ height }}>
-      {dataUrl ? (
-        <img src={dataUrl} alt={image.fileName} loading="lazy" />
+    <button className="thumbnail-item" onClick={onSelect} title={image.pathInArchive} style={{ height }} ref={itemRef}>
+      {thumbnail ? (
+        <img src={thumbnail.dataUrl} alt={image.fileName} loading="lazy" />
       ) : (
         <span>{loading ? 'Loading…' : 'No preview'}</span>
       )}

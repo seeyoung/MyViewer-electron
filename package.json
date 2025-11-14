@@ -25,6 +25,7 @@
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
+    "@emnapi/runtime": "^1.7.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/module-alias": "^2.0.4",
     "@types/node": "^20.19.23",
