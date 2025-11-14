@@ -184,6 +184,12 @@ function App() {
                       <button
                         key={`${source.type}-${source.path}`}
                         className="recent-chip"
+                        draggable={true}
+                        onDragStart={(e) => {
+                          e.dataTransfer.effectAllowed = 'copy';
+                          e.dataTransfer.setData('text/plain', source.path);
+                          e.dataTransfer.setData('application/x-source-path', source.path);
+                        }}
                         onClick={async () => {
                           if (source.type === SourceType.FOLDER) {
                             await openFolder(source.path);

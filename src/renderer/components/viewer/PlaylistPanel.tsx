@@ -335,10 +335,20 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
       return;
     }
 
-    const files = e.dataTransfer?.files;
-    if (!files || files.length === 0) return;
+    let paths: string[] = [];
 
-    const paths = Array.from(files).map(f => f.path);
+    // Check for internal drag (source path from recent sources or folder sidebar)
+    const sourcePath = e.dataTransfer.getData('application/x-source-path');
+    if (sourcePath) {
+      paths = [sourcePath];
+    } else {
+      // External file drop
+      const files = e.dataTransfer?.files;
+      if (!files || files.length === 0) return;
+      paths = Array.from(files).map(f => f.path);
+    }
+
+    if (paths.length === 0) return;
 
     try {
       const result = await window.electronAPI.invoke(channels.PLAYLIST_ADD_ENTRIES_BATCH, {

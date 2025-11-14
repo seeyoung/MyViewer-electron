@@ -114,6 +114,24 @@ const FolderSidebar: React.FC = () => {
       </div>
       {sidebarTab === 'folders' ? (
         <div className="folder-list">
+          {currentSource && (
+            <div
+              className="current-source-item"
+              draggable={true}
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = 'copy';
+                e.dataTransfer.setData('text/plain', currentSource.path);
+                e.dataTransfer.setData('application/x-source-path', currentSource.path);
+              }}
+              title={`Drag to add "${currentSource.label}" to playlist`}
+            >
+              <span className="source-icon">
+                {currentSource.type === SourceType.FOLDER ? '📁' : '📦'}
+              </span>
+              <span className="source-label">{currentSource.label}</span>
+              <span className="drag-hint">⋮⋮</span>
+            </div>
+          )}
           {folders.map((folder) => (
             <button
               key={folder.path}
@@ -165,6 +183,41 @@ const FolderSidebar: React.FC = () => {
         .folder-list {
           flex: 1;
           overflow-y: auto;
+        }
+        .current-source-item {
+          padding: 0.75rem;
+          margin: 0.5rem;
+          background: rgba(74, 158, 255, 0.15);
+          border: 1px dashed #4a9eff;
+          border-radius: 4px;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          cursor: grab;
+          transition: all 0.2s;
+        }
+        .current-source-item:hover {
+          background: rgba(74, 158, 255, 0.25);
+          border-color: #6eb3ff;
+        }
+        .current-source-item:active {
+          cursor: grabbing;
+        }
+        .source-icon {
+          font-size: 1.25rem;
+        }
+        .source-label {
+          flex: 1;
+          font-size: 0.875rem;
+          font-weight: 600;
+          color: #fff;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .drag-hint {
+          color: #888;
+          font-size: 1rem;
         }
         .folder-item {
           width: 100%;
