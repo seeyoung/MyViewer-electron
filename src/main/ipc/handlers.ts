@@ -513,6 +513,15 @@ function getAllImagesFromFolder(folder: any): any[] {
     })
   );
 
+  registry.register(
+    channels.PLAYLIST_VALIDATE_ENTRY,
+    withErrorHandling(async (event, data: any) => {
+      const { entry } = data;
+      const isValid = await playlistService.validateEntry(entry);
+      return { isValid };
+    })
+  );
+
   // Playlist playback state handlers
   registry.register(
     channels.PLAYLIST_GET_PLAYBACK_STATE,

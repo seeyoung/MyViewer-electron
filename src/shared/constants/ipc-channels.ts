@@ -64,6 +64,7 @@ export const PLAYLIST_REMOVE_ENTRY = 'playlist:remove-entry';
 export const PLAYLIST_REORDER_ENTRIES = 'playlist:reorder-entries';
 export const PLAYLIST_UPDATE_ENTRY = 'playlist:update-entry';
 export const PLAYLIST_CLEANUP_INVALID = 'playlist:cleanup-invalid';
+export const PLAYLIST_VALIDATE_ENTRY = 'playlist:validate-entry';
 
 // Playlist playback state operations
 export const PLAYLIST_GET_PLAYBACK_STATE = 'playlist:get-playback-state';

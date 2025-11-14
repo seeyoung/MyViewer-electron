@@ -48,6 +48,7 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editingName, setEditingName] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
+  const [entryValidityMap, setEntryValidityMap] = useState<Map<number, boolean>>(new Map());
 
   // @dnd-kit sensors for drag and drop
   const sensors = useSensors(
@@ -156,6 +157,21 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
       const result = await window.electronAPI.invoke(channels.PLAYLIST_GET_BY_ID, { id: playlistId });
       if (result?.entries) {
         setPlaylistEntries(result.entries);
+
+        // Validate all entries
+        const validityMap = new Map<number, boolean>();
+        const validationPromises = result.entries.map(async (entry: any) => {
+          try {
+            const validationResult = await window.electronAPI.invoke(channels.PLAYLIST_VALIDATE_ENTRY, { entry });
+            validityMap.set(entry.position, validationResult.isValid);
+          } catch (error) {
+            console.warn(`Failed to validate entry at position ${entry.position}:`, error);
+            validityMap.set(entry.position, false);
+          }
+        });
+
+        await Promise.all(validationPromises);
+        setEntryValidityMap(validityMap);
       }
     } catch (error) {
       console.error('Failed to load playlist entries:', error);
@@ -575,6 +591,7 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
                       key={entry.position}
                       entry={entry}
                       isActive={index === currentEntryIndex}
+                      isValid={entryValidityMap.get(entry.position) ?? true}
                       onClick={() => handleEntryClick(entry.position)}
                       onRemove={() => handleRemoveEntry(entry.position)}
                       onUpdateLabel={handleUpdateEntryLabel}

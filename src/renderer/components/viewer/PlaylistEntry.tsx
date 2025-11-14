@@ -6,6 +6,7 @@ import { CSS } from '@dnd-kit/utilities';
 interface PlaylistEntryProps {
   entry: PlaylistEntryType;
   isActive: boolean;
+  isValid?: boolean;
   onClick: () => void;
   onRemove: () => void;
   onUpdateLabel?: (position: number, newLabel: string) => void;
@@ -14,6 +15,7 @@ interface PlaylistEntryProps {
 const PlaylistEntry: React.FC<PlaylistEntryProps> = ({
   entry,
   isActive,
+  isValid = true,
   onClick,
   onRemove,
   onUpdateLabel,
@@ -111,6 +113,11 @@ const PlaylistEntry: React.FC<PlaylistEntryProps> = ({
         ) : (
           <div className="entry-label" title={entry.source_path} onDoubleClick={handleLabelDoubleClick}>
             {entry.label}
+            {!isValid && (
+              <span className="warning-badge" title="Path not found or inaccessible">
+                ⚠️
+              </span>
+            )}
           </div>
         )}
         <div className="entry-meta">
@@ -200,6 +207,16 @@ const PlaylistEntry: React.FC<PlaylistEntryProps> = ({
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .warning-badge {
+          flex-shrink: 0;
+          font-size: 0.875rem;
+          opacity: 0.9;
+          cursor: help;
         }
 
         .entry-meta {
