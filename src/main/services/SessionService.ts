@@ -110,10 +110,7 @@ export class SessionService {
    * Get session by ID (for internal use)
    */
   private getSessionById(sessionId: string): ViewingSession | null {
-    // This is a simplified version - in a real implementation,
-    // we'd need to add a getSessionById method to the repository
-    // For now, we'll work with what we have
-    return null;
+    return this.repository.getSessionById(sessionId);
   }
 
   /**

@@ -60,6 +60,7 @@ const FolderSidebar: React.FC = () => {
   const sidebarTab = useViewerStore((state) => state.sidebarTab);
   const setSidebarTab = useViewerStore((state) => state.setSidebarTab);
   const sidebarWidth = useViewerStore((state) => state.sidebarWidth);
+  const getFolderPosition = useViewerStore((state) => state.getFolderPosition);
   const { currentPageIndex } = useImageNavigation();
 
   const folders = useMemo(() => buildFolderList(images, currentSource?.path || ''), [images, currentSource]);
@@ -77,6 +78,12 @@ const FolderSidebar: React.FC = () => {
 
   const handleSelect = (folderPath: string) => {
     const normalized = folderPath === '/' ? '/' : folderPath;
+    const storedIndex = getFolderPosition(normalized);
+    if (storedIndex !== undefined && images[storedIndex]) {
+      navigateToPage(storedIndex);
+      setActiveFolderId(normalized);
+      return;
+    }
     const index = images.findIndex((img) => {
       const folder = img.folderPath || '/';
       const normalizedFolder = folder.startsWith('/') ? folder : `/${folder}`;

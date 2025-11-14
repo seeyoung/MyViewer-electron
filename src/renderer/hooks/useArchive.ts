@@ -12,6 +12,8 @@ export function useArchive() {
   const navigateToPage = useViewerStore(state => state.navigateToPage);
   const setSession = useViewerStore(state => state.setSession);
   const addRecentSource = useViewerStore(state => state.addRecentSource);
+  const loadFolderPositions = useViewerStore(state => state.loadFolderPositions);
+  const clearFolderPositions = useViewerStore(state => state.clearFolderPositions);
 
   const openArchive = useCallback(async (filePath: string, password?: string) => {
     setIsOpening(true);
@@ -44,6 +46,7 @@ export function useArchive() {
         path: archive.filePath,
         label: archive.fileName,
       });
+      loadFolderPositions(archive.filePath);
       setImages(images);
       setSession(session);
       const descriptor = {
@@ -70,7 +73,7 @@ export function useArchive() {
     } finally {
       setIsOpening(false);
     }
-  }, [setSource, setImages, setError, navigateToPage, setSession, addRecentSource]);
+  }, [setSource, setImages, setError, navigateToPage, setSession, addRecentSource, loadFolderPositions]);
 
   const openFolder = useCallback(async (folderPath: string) => {
     setIsOpening(true);
@@ -84,6 +87,7 @@ export function useArchive() {
       const { source, session, images } = result;
 
       setSource(source);
+      loadFolderPositions(source.path);
       setImages(images);
       setSession(session);
       addRecentSource(source);
@@ -103,16 +107,17 @@ export function useArchive() {
     } finally {
       setIsOpening(false);
     }
-  }, [setSource, setImages, setError, navigateToPage, setSession, addRecentSource]);
+  }, [setSource, setImages, setError, navigateToPage, setSession, addRecentSource, loadFolderPositions]);
 
   const closeArchive = useCallback(async (archiveId: string) => {
     try {
       await ipcClient.invoke(channels.ARCHIVE_CLOSE, { archiveId });
+      clearFolderPositions();
       useViewerStore.getState().reset();
     } catch (error) {
       console.error('Failed to close archive:', error);
     }
-  }, []);
+  }, [clearFolderPositions]);
 
   return {
     openArchive,

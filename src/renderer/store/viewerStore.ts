@@ -40,6 +40,8 @@ interface ViewerState {
   autoSlideEnabled: boolean;
   autoSlideInterval: number;
   autoSlideIntervalOverlay: { visible: boolean; value: number };
+  folderPositions: Record<string, number>;
+  folderPositionsKey: string | null;
 
   // Filter/search
   activeFolderId: string | null;
@@ -74,6 +76,10 @@ interface ViewerState {
   setAutoSlideEnabled: (enabled: boolean) => void;
   setAutoSlideInterval: (interval: number) => void;
   showAutoSlideOverlay: (value: number) => void;
+  loadFolderPositions: (sourcePath: string) => void;
+  setFolderPosition: (folderId: string, index: number) => void;
+  getFolderPosition: (folderId: string) => number | undefined;
+  clearFolderPositions: () => void;
   reset: () => void;
 }
 
@@ -108,6 +114,8 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   autoSlideEnabled: false,
   autoSlideInterval: 5000,
   autoSlideIntervalOverlay: { visible: false, value: 5000 },
+  folderPositions: {},
+  folderPositionsKey: null,
 
   activeFolderId: null,
   searchQuery: '',
@@ -181,8 +189,61 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
     }, 1000);
   },
 
+  loadFolderPositions: (sourcePath) => {
+    const key = `folder-positions:${sourcePath}`;
+    let data: Record<string, number> = {};
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        data = JSON.parse(raw);
+      }
+    } catch (error) {
+      console.error('Failed to load folder positions', error);
+    }
+    set({ folderPositions: data, folderPositionsKey: key });
+  },
+
+  setFolderPosition: (folderId, index) =>
+    set((state) => {
+      const normalized = normalizeFolder(folderId);
+      const updated = { ...state.folderPositions, [normalized]: Math.max(0, index) };
+      if (state.folderPositionsKey) {
+        try {
+          localStorage.setItem(state.folderPositionsKey, JSON.stringify(updated));
+        } catch (error) {
+          console.error('Failed to persist folder positions', error);
+        }
+      }
+      return { folderPositions: updated };
+    }),
+
+  getFolderPosition: (folderId) => {
+    const normalized = normalizeFolder(folderId);
+    return get().folderPositions[normalized];
+  },
+
+  clearFolderPositions: () =>
+    set((state) => {
+      if (state.folderPositionsKey) {
+        try {
+          localStorage.removeItem(state.folderPositionsKey);
+        } catch (error) {
+          console.error('Failed to clear folder positions', error);
+        }
+      }
+      return { folderPositions: {}, folderPositionsKey: null };
+    }),
+
   reset: () =>
-    set({
+    set((state) => {
+      if (state.folderPositionsKey) {
+        try {
+          localStorage.removeItem(state.folderPositionsKey);
+        } catch (error) {
+          console.error('Failed to clear folder positions', error);
+        }
+      }
+      return {
       currentSource: null,
       currentSession: null,
       images: [],
@@ -201,11 +262,14 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       autoSlideEnabled: false,
       autoSlideInterval: 5000,
       autoSlideIntervalOverlay: { visible: false, value: 5000 },
+      folderPositions: {},
+      folderPositionsKey: null,
       activeFolderId: null,
       searchQuery: '',
       bookmarks: [],
       isLoading: false,
       error: null,
       recentSources: [],
+      };
     }),
 }));

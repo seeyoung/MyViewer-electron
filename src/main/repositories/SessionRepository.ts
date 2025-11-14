@@ -27,6 +27,18 @@ export class SessionRepository {
   }
 
   /**
+   * Get session by ID
+   */
+  getSessionById(id: string): ViewingSession | null {
+    const stmt = this.db.prepare('SELECT * FROM viewing_sessions WHERE id = ?');
+    const row = stmt.get(id);
+    if (!row) {
+      return null;
+    }
+    return this.rowToSession(row);
+  }
+
+  /**
    * Create new session
    */
   createSession(session: ViewingSession): ViewingSession {

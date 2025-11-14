@@ -9,6 +9,7 @@ export function useImageNavigation() {
   const currentSource = useViewerStore(state => state.currentSource);
   const currentSession = useViewerStore(state => state.currentSession);
   const navigateToPage = useViewerStore(state => state.navigateToPage);
+  const setFolderPosition = useViewerStore(state => state.setFolderPosition);
 
   const currentImage = images[currentPageIndex];
   const totalPages = images.length;
@@ -62,8 +63,12 @@ export function useImageNavigation() {
       }
     };
 
+    if (currentImage) {
+      setFolderPosition(currentImage.folderPath || '/', currentPageIndex);
+    }
+
     saveSession();
-  }, [currentPageIndex, currentSource, currentSession]);
+  }, [currentPageIndex, currentSource, currentSession, currentImage, setFolderPosition]);
 
   return {
     currentImage,
