@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { PlaylistEntry as PlaylistEntryType } from '@shared/types/playlist';
 
 interface PlaylistEntryProps {
@@ -6,18 +6,77 @@ interface PlaylistEntryProps {
   isActive: boolean;
   onClick: () => void;
   onRemove: () => void;
+  onDragStart?: (position: number) => void;
+  onDragOver?: (position: number) => void;
+  onDrop?: (position: number) => void;
 }
 
-const PlaylistEntry: React.FC<PlaylistEntryProps> = ({ entry, isActive, onClick, onRemove }) => {
+const PlaylistEntry: React.FC<PlaylistEntryProps> = ({
+  entry,
+  isActive,
+  onClick,
+  onRemove,
+  onDragStart,
+  onDragOver,
+  onDrop
+}) => {
+  const [isDragging, setIsDragging] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+
   const handleRemoveClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onRemove();
   };
 
-  const entryClasses = ['playlist-entry', isActive ? 'active' : ''].filter(Boolean).join(' ');
+  const handleDragStart = (e: React.DragEvent) => {
+    e.stopPropagation();
+    setIsDragging(true);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', entry.position.toString());
+    onDragStart?.(entry.position);
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    setIsDragOver(true);
+    onDragOver?.(entry.position);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    onDrop?.(entry.position);
+  };
+
+  const entryClasses = [
+    'playlist-entry',
+    isActive ? 'active' : '',
+    isDragging ? 'dragging' : '',
+    isDragOver ? 'drag-over' : ''
+  ].filter(Boolean).join(' ');
 
   return (
-    <div className={entryClasses} onClick={onClick}>
+    <div
+      className={entryClasses}
+      onClick={onClick}
+      draggable={true}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div className="entry-thumbnail">
         {entry.thumbnail_path ? (
           <img src={entry.thumbnail_path} alt={entry.label} />
@@ -57,7 +116,7 @@ const PlaylistEntry: React.FC<PlaylistEntryProps> = ({ entry, isActive, onClick,
           background-color: #1d1d1d;
           border: 1px solid #3d3d3d;
           border-radius: 4px;
-          cursor: pointer;
+          cursor: grab;
           transition: all 0.2s;
         }
 
@@ -70,6 +129,16 @@ const PlaylistEntry: React.FC<PlaylistEntryProps> = ({ entry, isActive, onClick,
           background-color: #3d3d3d;
           border-color: #4a9eff;
           box-shadow: 0 0 0 1px #4a9eff;
+        }
+
+        .playlist-entry.dragging {
+          opacity: 0.5;
+          cursor: grabbing;
+        }
+
+        .playlist-entry.drag-over {
+          border-top: 2px solid #4a9eff;
+          margin-top: -2px;
         }
 
         .entry-thumbnail {

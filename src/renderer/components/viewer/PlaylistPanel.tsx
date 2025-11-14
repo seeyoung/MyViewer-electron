@@ -24,6 +24,7 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
+  const [draggedPosition, setDraggedPosition] = useState<number | null>(null);
 
   // Load playlists on mount
   useEffect(() => {
@@ -157,6 +158,31 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
     goToEntryByIndex(position);
   };
 
+  const handleEntryDragStart = (position: number) => {
+    setDraggedPosition(position);
+  };
+
+  const handleEntryDrop = async (toPosition: number) => {
+    if (draggedPosition === null || !activePlaylist || draggedPosition === toPosition) {
+      setDraggedPosition(null);
+      return;
+    }
+
+    try {
+      await window.electronAPI.invoke(channels.PLAYLIST_REORDER_ENTRIES, {
+        playlistId: activePlaylist.id,
+        fromPosition: draggedPosition,
+        toPosition,
+      });
+      await loadPlaylistEntries(activePlaylist.id);
+      setDraggedPosition(null);
+    } catch (error) {
+      console.error('Failed to reorder entries:', error);
+      alert('Failed to reorder entries: ' + (error as Error).message);
+      setDraggedPosition(null);
+    }
+  };
+
   const panelClasses = ['playlist-panel', className, showPlaylistPanel ? 'open' : ''].filter(Boolean).join(' ');
 
   return (
@@ -248,6 +274,8 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ className }) => {
                   isActive={index === currentEntryIndex}
                   onClick={() => handleEntryClick(entry.position)}
                   onRemove={() => handleRemoveEntry(entry.position)}
+                  onDragStart={handleEntryDragStart}
+                  onDrop={handleEntryDrop}
                 />
               ))}
             </div>
