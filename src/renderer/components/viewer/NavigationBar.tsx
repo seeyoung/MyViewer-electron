@@ -27,6 +27,7 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
   const showAutoSlideOverlay = useViewerStore(state => state.showAutoSlideOverlay);
   const showPlaylistPanel = useViewerStore(state => state.showPlaylistPanel);
   const togglePlaylistPanel = useViewerStore(state => state.togglePlaylistPanel);
+  const playlistEntries = useViewerStore(state => state.playlistEntries);
 
   const totalPages = images.length;
   const currentPage = currentPageIndex + 1; // Display 1-based index
@@ -206,10 +207,13 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
 
           <button
             onClick={togglePlaylistPanel}
-            className={`panel-button ${showPlaylistPanel ? 'active' : ''}`}
+            className={`panel-button icon-button ${showPlaylistPanel ? 'active' : ''}`}
             title="Toggle Playlist Panel"
           >
-            {showPlaylistPanel ? 'Hide Playlist' : 'Show Playlist'}
+            <span className="button-icon">📋</span>
+            {playlistEntries.length > 0 && (
+              <span className="entry-badge">{playlistEntries.length}</span>
+            )}
           </button>
 
           <button
@@ -429,6 +433,34 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
 
         .panel-button.active {
           background-color: #555;
+        }
+
+        .panel-button.icon-button {
+          position: relative;
+          min-width: auto;
+          padding: 0.4rem 0.8rem;
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
+        }
+
+        .button-icon {
+          font-size: 1.25rem;
+        }
+
+        .entry-badge {
+          position: absolute;
+          top: -6px;
+          right: -6px;
+          background-color: #4a9eff;
+          color: #fff;
+          font-size: 0.7rem;
+          font-weight: 600;
+          padding: 0.125rem 0.375rem;
+          border-radius: 10px;
+          min-width: 18px;
+          text-align: center;
+          box-shadow: 0 0 0 2px #1d1d1d;
         }
       `}</style>
     </div>
