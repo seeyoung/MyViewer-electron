@@ -9,6 +9,7 @@ import {
   FitMode,
   Rotation,
 } from '@shared/types/ViewingSession';
+import { ScanStatus, ScanProgress } from '@shared/types/Scan';
 
 interface ViewerState {
   // Source state
@@ -54,6 +55,12 @@ interface ViewerState {
   isLoading: boolean;
   error: string | null;
 
+  // Scan state
+  scanStatus: ScanStatus;
+  scanToken: string | null;
+  scanProgress: ScanProgress | null;
+  estimatedTotal: number | undefined;
+
   // Actions
   setSource: (source: SourceDescriptor) => void;
   setSession: (session: ViewingSession | null) => void;
@@ -80,6 +87,11 @@ interface ViewerState {
   setFolderPosition: (folderId: string, index: number) => void;
   getFolderPosition: (folderId: string) => number | undefined;
   clearFolderPositions: () => void;
+  setScanStatus: (status: ScanStatus) => void;
+  setScanToken: (token: string | null) => void;
+  setScanProgress: (progress: ScanProgress | null) => void;
+  setEstimatedTotal: (total: number | undefined) => void;
+  addImageChunk: (images: Image[]) => void;
   reset: () => void;
 }
 
@@ -124,6 +136,11 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
 
   isLoading: false,
   error: null,
+
+  scanStatus: ScanStatus.IDLE,
+  scanToken: null,
+  scanProgress: null,
+  estimatedTotal: undefined,
 
   // Actions
   setSource: (source) => set({ currentSource: source }),
@@ -234,6 +251,22 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       return { folderPositions: {}, folderPositionsKey: null };
     }),
 
+  setScanStatus: (status) => set({ scanStatus: status }),
+
+  setScanToken: (token) => set({ scanToken: token }),
+
+  setScanProgress: (progress) => set({ scanProgress: progress }),
+
+  setEstimatedTotal: (total) => set({ estimatedTotal: total }),
+
+  addImageChunk: (newImages) =>
+    set((state) => {
+      // Merge new images with existing ones
+      const existingIds = new Set(state.images.map(img => img.id));
+      const uniqueNewImages = newImages.filter(img => !existingIds.has(img.id));
+      return { images: [...state.images, ...uniqueNewImages] };
+    }),
+
   reset: () =>
     set((state) => {
       if (state.folderPositionsKey) {
@@ -270,6 +303,10 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       isLoading: false,
       error: null,
       recentSources: [],
+      scanStatus: ScanStatus.IDLE,
+      scanToken: null,
+      scanProgress: null,
+      estimatedTotal: undefined,
       };
     }),
 }));

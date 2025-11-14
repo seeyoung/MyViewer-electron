@@ -206,14 +206,16 @@ app.whenReady().then(() => {
   // Initialize database
   initializeDatabase();
 
-  // Initialize IPC handlers
-  initializeIpcHandlers();
-
   // Initialize window event handlers
   initializeWindowHandlers();
 
   // Create window
   createWindow();
+
+  // Initialize IPC handlers (needs mainWindow to be created first)
+  if (mainWindow) {
+    initializeIpcHandlers(mainWindow);
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

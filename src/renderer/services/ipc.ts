@@ -3,6 +3,9 @@
  * Typed interface for invoking IPC methods from renderer process
  */
 
+import { ScanProgressEvent, ScanCompleteEvent } from '@shared/types/Scan';
+import * as channels from '@shared/constants/ipc-channels';
+
 class IpcClient {
   private electronAPI = window.electronAPI;
 
@@ -38,6 +41,27 @@ class IpcClient {
    */
   public removeAllListeners(channel: string): void {
     this.electronAPI.removeAllListeners(channel);
+  }
+
+  /**
+   * Cancel an active folder scan
+   */
+  public async cancelScan(scanToken: string): Promise<{ success: boolean }> {
+    return this.invoke(channels.FOLDER_SCAN_CANCEL, { scanToken });
+  }
+
+  /**
+   * Listen to folder scan progress events
+   */
+  public onScanProgress(callback: (event: ScanProgressEvent) => void): () => void {
+    return this.on(channels.FOLDER_SCAN_PROGRESS, callback);
+  }
+
+  /**
+   * Listen to folder scan complete events
+   */
+  public onScanComplete(callback: (event: ScanCompleteEvent) => void): () => void {
+    return this.on(channels.FOLDER_SCAN_COMPLETE, callback);
   }
 }
 

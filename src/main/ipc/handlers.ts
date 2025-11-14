@@ -1,4 +1,4 @@
-import { ipcMain, IpcMainInvokeEvent } from 'electron';
+import { ipcMain, IpcMainInvokeEvent, BrowserWindow } from 'electron';
 
 /**
  * IPC Handler Registry
@@ -81,7 +81,15 @@ const thumbnailService = new ThumbnailService(imageService, folderService);
  * Initialize all IPC handlers
  * This will be called from main process on app ready
  */
-export function initializeIpcHandlers(): void {
+export function initializeIpcHandlers(mainWindow: BrowserWindow): void {
+  // Set up event forwarding from FolderService to renderer
+  folderService.on('scan-progress', (event) => {
+    mainWindow.webContents.send(channels.FOLDER_SCAN_PROGRESS, event);
+  });
+
+  folderService.on('scan-complete', (event) => {
+    mainWindow.webContents.send(channels.FOLDER_SCAN_COMPLETE, event);
+  });
   // Archive handlers
   registry.register(
     channels.ARCHIVE_OPEN,
@@ -351,7 +359,7 @@ function getAllImagesFromFolder(folder: any): any[] {
     channels.FOLDER_OPEN,
     withErrorHandling(async (event, data: any) => {
       const { folderPath } = data;
-      const result = await folderService.openFolder(folderPath);
+      const result = await folderService.openFolderProgressive(folderPath);
 
       const session = sessionService.getOrCreateSession(
         folderPath,
@@ -382,10 +390,22 @@ function getAllImagesFromFolder(folder: any): any[] {
       const response = {
         source: result.source,
         session: serializableSession,
-        images: result.images,
+        initialImages: result.initialImages,
         rootFolder: result.rootFolder,
+        scanToken: result.scanToken,
+        estimatedTotal: result.estimatedTotal,
+        isComplete: result.isComplete,
       };
 
       return JSON.parse(JSON.stringify(response));
+    })
+  );
+
+  registry.register(
+    channels.FOLDER_SCAN_CANCEL,
+    withErrorHandling(async (event, data: any) => {
+      const { scanToken } = data;
+      const cancelled = await folderService.cancelScan(scanToken);
+      return { success: cancelled };
     })
   );
