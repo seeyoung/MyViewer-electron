@@ -7,10 +7,13 @@ import BottomThumbnails from './components/viewer/BottomThumbnails';
 import LoadingIndicator from './components/shared/LoadingIndicator';
 import { useViewerStore } from './store/viewerStore';
 import { useArchive } from './hooks/useArchive';
+import { useSlideshowPlayback } from './hooks/useSlideshowPlayback';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useAutoSlide } from './hooks/useAutoSlide';
 import { SourceDescriptor, SourceType } from '@shared/types/Source';
 import * as channels from '@shared/constants/ipc-channels';
+import SlideshowManagerPanel from './components/slideshow/SlideshowManagerPanel';
+import { RECENT_SOURCE_MIME } from '@shared/constants/drag';
 
 function App() {
   console.log('🚀 App component is rendering!');
@@ -24,12 +27,14 @@ function App() {
   const recentSources = useViewerStore(state => state.recentSources);
   const setRecentSources = useViewerStore(state => state.setRecentSources);
   const { openArchive, openFolder, isOpening } = useArchive();
+  useSlideshowPlayback();
   const sidebarWidth = useViewerStore(state => state.sidebarWidth);
   const setSidebarWidth = useViewerStore(state => state.setSidebarWidth);
   const thumbnailPosition = useViewerStore(state => state.thumbnailPosition);
   const setThumbnailPosition = useViewerStore(state => state.setThumbnailPosition);
   const sidebarTab = useViewerStore(state => state.sidebarTab);
   const setSidebarTab = useViewerStore(state => state.setSidebarTab);
+  const showSlideshowManager = useViewerStore(state => state.showSlideshowManager);
   const [viewerSize, setViewerSize] = useState({ width: 800, height: 600 });
 
   // Enable keyboard shortcuts
@@ -183,6 +188,17 @@ function App() {
                       <button
                         key={`${source.type}-${source.path}`}
                         className="recent-chip"
+                        draggable
+                        onDragStart={(event) => {
+                          try {
+                            event.dataTransfer?.setData(RECENT_SOURCE_MIME, JSON.stringify(source));
+                            if (event.dataTransfer) {
+                              event.dataTransfer.effectAllowed = 'copy';
+                            }
+                          } catch (error) {
+                            console.error('Failed to attach drag data', error);
+                          }
+                        }}
                         onClick={async () => {
                           if (source.type === SourceType.FOLDER) {
                             await openFolder(source.path);
@@ -229,6 +245,7 @@ function App() {
               </div>
             </div>
           </div>
+          {showSlideshowManager && <SlideshowManagerPanel />}
         </header>
 
         {currentSource && <NavigationBar className={isFullscreen ? 'floating' : ''} />}

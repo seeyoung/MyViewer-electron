@@ -8,6 +8,9 @@ export function useAutoSlide() {
   const setAutoSlideEnabled = useViewerStore(state => state.setAutoSlideEnabled);
   const imagesLength = useViewerStore(state => state.images.length);
   const currentPageIndex = useViewerStore(state => state.currentPageIndex);
+  const slideshowQueueEntries = useViewerStore(state => state.slideshowQueueEntries);
+  const activeSlideshowEntryId = useViewerStore(state => state.activeSlideshowEntryId);
+  const advanceSlideshowQueue = useViewerStore(state => state.advanceSlideshowQueue);
   const { goToNext } = useImageNavigation();
 
   useEffect(() => {
@@ -22,7 +25,15 @@ export function useAutoSlide() {
 
     const id = setInterval(() => {
       if (currentPageIndex >= imagesLength - 1) {
-        setAutoSlideEnabled(false);
+        const currentIndex = activeSlideshowEntryId
+          ? slideshowQueueEntries.findIndex((entry) => entry.id === activeSlideshowEntryId)
+          : -1;
+        const hasNextEntry = currentIndex >= 0 && currentIndex < slideshowQueueEntries.length - 1;
+        if (hasNextEntry) {
+          advanceSlideshowQueue();
+        } else {
+          setAutoSlideEnabled(false);
+        }
       } else {
         goToNext();
       }
@@ -31,5 +42,15 @@ export function useAutoSlide() {
     return () => {
       clearInterval(id);
     };
-  }, [autoSlideEnabled, autoSlideInterval, currentPageIndex, imagesLength, goToNext, setAutoSlideEnabled]);
+  }, [
+    activeSlideshowEntryId,
+    advanceSlideshowQueue,
+    autoSlideEnabled,
+    autoSlideInterval,
+    currentPageIndex,
+    goToNext,
+    imagesLength,
+    setAutoSlideEnabled,
+    slideshowQueueEntries,
+  ]);
 }

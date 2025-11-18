@@ -3,6 +3,16 @@ import { useViewerStore } from '../store/viewerStore';
 import ipcClient from '../services/ipc';
 import * as channels from '@shared/constants/ipc-channels';
 import { SourceType } from '@shared/types/Source';
+import { useSlideshowManager } from './useSlideshowManager';
+
+interface ArchiveOpenOptions {
+  password?: string;
+  userOpen?: boolean;
+}
+
+interface FolderOpenOptions {
+  userOpen?: boolean;
+}
 
 export function useArchive() {
   const [isOpening, setIsOpening] = useState(false);
@@ -14,8 +24,11 @@ export function useArchive() {
   const addRecentSource = useViewerStore(state => state.addRecentSource);
   const loadFolderPositions = useViewerStore(state => state.loadFolderPositions);
   const clearFolderPositions = useViewerStore(state => state.clearFolderPositions);
+  const { startSlideshowFromRoot } = useSlideshowManager();
+  const setSlideshowRoot = useViewerStore(state => state.setSlideshowRoot);
 
-  const openArchive = useCallback(async (filePath: string, password?: string) => {
+  const openArchive = useCallback(async (filePath: string, options?: ArchiveOpenOptions) => {
+    const { password, userOpen = true } = options ?? {};
     setIsOpening(true);
     setError(null);
 
@@ -55,14 +68,25 @@ export function useArchive() {
         path: archive.filePath,
         label: archive.fileName,
       } as const;
-      addRecentSource(descriptor);
-      ipcClient.invoke(channels.RECENT_SOURCES_ADD, descriptor).catch((error) => {
-        console.error('Failed to persist recent source', error);
-      });
+
+      if (userOpen) {
+        addRecentSource(descriptor);
+        ipcClient.invoke(channels.RECENT_SOURCES_ADD, descriptor).catch((error) => {
+          console.error('Failed to persist recent source', error);
+        });
+      }
+
+      if (userOpen) {
+        startSlideshowFromRoot(descriptor);
+      } else {
+        setSlideshowRoot(descriptor);
+      }
 
       // Navigate to last viewed page (auto-resume)
-      if (session && session.currentPageIndex !== undefined) {
+      if (userOpen && session && session.currentPageIndex !== undefined) {
         navigateToPage(session.currentPageIndex);
+      } else {
+        navigateToPage(0);
       }
 
       return archive;
@@ -73,9 +97,10 @@ export function useArchive() {
     } finally {
       setIsOpening(false);
     }
-  }, [setSource, setImages, setError, navigateToPage, setSession, addRecentSource, loadFolderPositions]);
+  }, [addRecentSource, loadFolderPositions, navigateToPage, setError, setImages, setSession, setSource, setSlideshowRoot, startSlideshowFromRoot]);
 
-  const openFolder = useCallback(async (folderPath: string) => {
+  const openFolder = useCallback(async (folderPath: string, options?: FolderOpenOptions) => {
+    const { userOpen = true } = options ?? {};
     setIsOpening(true);
     setError(null);
 
@@ -90,13 +115,24 @@ export function useArchive() {
       loadFolderPositions(source.path);
       setImages(images);
       setSession(session);
-      addRecentSource(source);
-      ipcClient.invoke(channels.RECENT_SOURCES_ADD, source).catch((error) => {
-        console.error('Failed to persist recent source', error);
-      });
 
-      if (session && session.currentPageIndex !== undefined) {
+      if (userOpen) {
+        addRecentSource(source);
+        ipcClient.invoke(channels.RECENT_SOURCES_ADD, source).catch((error) => {
+          console.error('Failed to persist recent source', error);
+        });
+      }
+
+      if (userOpen) {
+        startSlideshowFromRoot(source);
+      } else {
+        setSlideshowRoot(source);
+      }
+
+      if (userOpen && session && session.currentPageIndex !== undefined) {
         navigateToPage(session.currentPageIndex);
+      } else {
+        navigateToPage(0);
       }
 
       return source;
@@ -107,7 +143,7 @@ export function useArchive() {
     } finally {
       setIsOpening(false);
     }
-  }, [setSource, setImages, setError, navigateToPage, setSession, addRecentSource, loadFolderPositions]);
+  }, [addRecentSource, loadFolderPositions, navigateToPage, setError, setImages, setSession, setSource, setSlideshowRoot, startSlideshowFromRoot]);
 
   const closeArchive = useCallback(async (archiveId: string) => {
     try {

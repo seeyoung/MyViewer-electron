@@ -1,3 +1,5 @@
+import * as channels from '@shared/constants/ipc-channels';
+
 /**
  * IPC Client Wrapper
  * Typed interface for invoking IPC methods from renderer process
@@ -38,6 +40,34 @@ class IpcClient {
    */
   public removeAllListeners(channel: string): void {
     this.electronAPI.removeAllListeners(channel);
+  }
+
+  public async listSlideshows() {
+    return this.invoke(channels.SLIDESHOW_LIST);
+  }
+
+  public async getSlideshow(id: string) {
+    return this.invoke(channels.SLIDESHOW_GET, { id });
+  }
+
+  public async createSlideshow(name: string, description?: string) {
+    return this.invoke(channels.SLIDESHOW_CREATE, { name, description });
+  }
+
+  public async updateSlideshow(id: string, payload: { name?: string; description?: string; allowDuplicates?: boolean }) {
+    return this.invoke(channels.SLIDESHOW_UPDATE, { id, ...payload });
+  }
+
+  public async deleteSlideshow(id: string) {
+    return this.invoke(channels.SLIDESHOW_DELETE, { id });
+  }
+
+  public async setSlideshowEntries(slideshowId: string, entries: unknown[]) {
+    return this.invoke(channels.SLIDESHOW_SET_ENTRIES, { slideshowId, entries });
+  }
+
+  public async addSlideshowEntry(slideshowId: string, entry: unknown, position?: number) {
+    return this.invoke(channels.SLIDESHOW_ADD_ENTRY, { slideshowId, entry, position });
   }
 }
 

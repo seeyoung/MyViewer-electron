@@ -42,3 +42,12 @@ export const ARCHIVE_SCAN_PROGRESS = 'archive:scan-progress';
 // Settings operations
 export const SETTINGS_GET = 'settings:get';
 export const SETTINGS_UPDATE = 'settings:update';
+
+// Slideshow management
+export const SLIDESHOW_LIST = 'slideshow:list';
+export const SLIDESHOW_GET = 'slideshow:get';
+export const SLIDESHOW_CREATE = 'slideshow:create';
+export const SLIDESHOW_UPDATE = 'slideshow:update';
+export const SLIDESHOW_DELETE = 'slideshow:delete';
+export const SLIDESHOW_SET_ENTRIES = 'slideshow:set-entries';
+export const SLIDESHOW_ADD_ENTRY = 'slideshow:add-entry';

@@ -62,6 +62,9 @@ import { SessionService } from '../services/SessionService';
 import { FolderService } from '../services/FolderService';
 import { RecentSourcesService } from '../services/RecentSourcesService';
 import { ThumbnailService } from '../services/ThumbnailService';
+import { SlideshowRepository } from '../repositories/SlideshowRepository';
+import { SlideshowService } from '../services/SlideshowService';
+import { registerSlideshowHandlers } from './slideshowHandlers';
 import { withErrorHandling, IpcErrorCode, createIpcError } from './error-handler';
 import * as channels from '@shared/constants/ipc-channels';
 import { SourceDescriptor, SourceType } from '@shared/types/Source';
@@ -76,12 +79,15 @@ const sessionService = new SessionService();
 const folderService = new FolderService();
 const recentSourcesService = new RecentSourcesService();
 const thumbnailService = new ThumbnailService(imageService, folderService);
+const slideshowRepository = new SlideshowRepository();
+const slideshowService = new SlideshowService({ repository: slideshowRepository });
 
 /**
  * Initialize all IPC handlers
  * This will be called from main process on app ready
  */
 export function initializeIpcHandlers(): void {
+  registerSlideshowHandlers({ registry, slideshowService });
   // Archive handlers
   registry.register(
     channels.ARCHIVE_OPEN,

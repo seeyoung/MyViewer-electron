@@ -9,6 +9,9 @@ import {
   FitMode,
   Rotation,
 } from '@shared/types/ViewingSession';
+import { SlideshowQueueItem, SlideshowQueueItemInput, SlideshowSourceType } from '@shared/types/slideshow';
+
+export const DEFAULT_SLIDESHOW_NAME = 'Default';
 
 interface ViewerState {
   // Source state
@@ -16,6 +19,15 @@ interface ViewerState {
   currentSession: ViewingSession | null;
   images: Image[];
   recentSources: SourceDescriptor[];
+
+  // Slideshow context
+  slideshowRoot: SourceDescriptor | null;
+  currentSlidePath: string | null;
+  slideshowQueueEntries: SlideshowQueueItem[];
+  activeSlideshowEntryId: string | null;
+  slideshowQueueName: string;
+  activeSlideshowId: string | null;
+  slideshowQueueLoading: boolean;
 
   // Navigation state
   currentPageIndex: number;
@@ -37,6 +49,7 @@ interface ViewerState {
   sidebarWidth: number;
   thumbnailPosition: 'sidebar' | 'bottom';
   showBookmarks: boolean;
+  showSlideshowManager: boolean;
   autoSlideEnabled: boolean;
   autoSlideInterval: number;
   autoSlideIntervalOverlay: { visible: boolean; value: number };
@@ -70,9 +83,25 @@ interface ViewerState {
   setLoading: (loading: boolean) => void;
   setRecentSources: (sources: SourceDescriptor[]) => void;
   addRecentSource: (source: SourceDescriptor) => void;
+  setSlideshowRoot: (root: SourceDescriptor | null) => void;
+  setCurrentSlidePath: (path: string | null) => void;
+  addSlideshowQueueEntry: (entry: SlideshowQueueItemInput, position?: number) => SlideshowQueueItem;
+  removeSlideshowQueueEntry: (entryId: string) => void;
+  clearSlideshowQueue: () => void;
+  setSlideshowQueueFromSources: (
+    entries: SlideshowQueueItemInput[],
+    metadata?: { name?: string; activeSlideshowId?: string | null; activeIndex?: number; autoStart?: boolean }
+  ) => void;
+  setSlideshowQueueName: (name: string) => void;
+  setActiveSlideshowEntryId: (entryId: string | null) => void;
+  advanceSlideshowQueue: () => void;
+  setActiveSlideshowId: (id: string | null) => void;
+  setSlideshowQueueLoading: (loading: boolean) => void;
+  moveSlideshowQueueEntry: (entryId: string, targetIndex: number) => void;
   setSidebarTab: (tab: 'folders' | 'thumbnails') => void;
   setSidebarWidth: (width: number) => void;
   setThumbnailPosition: (position: 'sidebar' | 'bottom') => void;
+  toggleSlideshowManager: () => void;
   setAutoSlideEnabled: (enabled: boolean) => void;
   setAutoSlideInterval: (interval: number) => void;
   showAutoSlideOverlay: (value: number) => void;
@@ -88,12 +117,39 @@ const normalizeFolder = (folderPath?: string | null) => {
   return folderPath.startsWith('/') ? folderPath : `/${folderPath}`;
 };
 
+const generateQueueItemId = () => {
+  if (typeof globalThis !== 'undefined' && globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  return `slideshow-entry-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
+const clampPosition = (position: number, length: number) => {
+  if (typeof position !== 'number' || Number.isNaN(position)) {
+    return length;
+  }
+  return Math.max(0, Math.min(position, length));
+};
+
+const materializeQueueItems = (entries: SlideshowQueueItemInput[]): SlideshowQueueItem[] =>
+  entries.map((entry) => ({
+    ...entry,
+    id: generateQueueItemId(),
+  }));
+
 export const useViewerStore = create<ViewerState>((set, get) => ({
   // Initial state
   currentSource: null,
   currentSession: null,
   images: [],
   recentSources: [],
+  slideshowRoot: null,
+  currentSlidePath: null,
+  slideshowQueueEntries: [],
+  activeSlideshowEntryId: null,
+  slideshowQueueName: DEFAULT_SLIDESHOW_NAME,
+  activeSlideshowId: null,
+  slideshowQueueLoading: false,
 
   currentPageIndex: 0,
   readingDirection: ReadingDirection.LTR,
@@ -111,6 +167,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   sidebarWidth: 240,
   thumbnailPosition: 'sidebar',
   showBookmarks: false,
+  showSlideshowManager: false,
   autoSlideEnabled: false,
   autoSlideInterval: 5000,
   autoSlideIntervalOverlay: { visible: false, value: 5000 },
@@ -172,11 +229,151 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       };
     }),
 
+  setSlideshowRoot: (root) => set({ slideshowRoot: root }),
+
+  setCurrentSlidePath: (path) => set({ currentSlidePath: path }),
+
+  addSlideshowQueueEntry: (entry, position) => {
+    const queueEntry: SlideshowQueueItem = {
+      ...entry,
+      id: generateQueueItemId(),
+    };
+    set((state) => {
+      const insertAt = clampPosition(position ?? state.slideshowQueueEntries.length, state.slideshowQueueEntries.length);
+      const entries = [...state.slideshowQueueEntries];
+      entries.splice(insertAt, 0, queueEntry);
+      const partial: Partial<ViewerState> = {
+        slideshowQueueEntries: entries,
+      };
+      if (!state.activeSlideshowEntryId) {
+        partial.activeSlideshowEntryId = queueEntry.id;
+        partial.currentSlidePath = queueEntry.sourcePath;
+      }
+      return partial;
+    });
+    return queueEntry;
+  },
+
+  removeSlideshowQueueEntry: (entryId) =>
+    set((state) => {
+      const index = state.slideshowQueueEntries.findIndex((entry) => entry.id === entryId);
+      if (index === -1) {
+        return {};
+      }
+      const entries = state.slideshowQueueEntries.filter((entry) => entry.id !== entryId);
+      const removingActive = state.activeSlideshowEntryId === entryId;
+      const partial: Partial<ViewerState> = {
+        slideshowQueueEntries: entries,
+      };
+
+      if (removingActive) {
+        if (entries.length === 0) {
+          partial.currentSlidePath = null;
+          partial.activeSlideshowEntryId = null;
+          partial.autoSlideEnabled = false;
+        } else {
+          const nextIndex = Math.min(index, entries.length - 1);
+          partial.activeSlideshowEntryId = entries[nextIndex].id;
+          partial.currentSlidePath = entries[nextIndex].sourcePath;
+        }
+      }
+
+      if (entries.length === 0) {
+        partial.slideshowQueueName = DEFAULT_SLIDESHOW_NAME;
+        partial.activeSlideshowId = null;
+      }
+
+      return partial;
+    }),
+
+  clearSlideshowQueue: () =>
+    set(() => ({
+      slideshowQueueEntries: [],
+      activeSlideshowEntryId: null,
+      currentSlidePath: null,
+      autoSlideEnabled: false,
+      slideshowQueueName: DEFAULT_SLIDESHOW_NAME,
+      activeSlideshowId: null,
+      slideshowQueueLoading: false,
+    })),
+
+  setSlideshowQueueFromSources: (entries, metadata) =>
+    set((state) => {
+      const queueEntries = materializeQueueItems(entries);
+      const activeIndex = metadata?.activeIndex ?? 0;
+      const activeEntry = queueEntries[activeIndex] ?? queueEntries[0];
+      const shouldAutoStart = metadata?.autoStart ?? true;
+      const resolvedName =
+        metadata?.name ??
+        (state.activeSlideshowId ? state.slideshowQueueName : DEFAULT_SLIDESHOW_NAME);
+      return {
+        slideshowQueueEntries: queueEntries,
+        activeSlideshowEntryId: activeEntry ? activeEntry.id : null,
+        currentSlidePath: shouldAutoStart ? (activeEntry ? activeEntry.sourcePath : null) : state.currentSlidePath,
+        slideshowQueueName: resolvedName,
+        activeSlideshowId: metadata?.activeSlideshowId ?? state.activeSlideshowId ?? null,
+      };
+    }),
+
+  setSlideshowQueueName: (name) => set({ slideshowQueueName: name }),
+
+  setActiveSlideshowEntryId: (entryId) => set({ activeSlideshowEntryId: entryId }),
+
+  setActiveSlideshowId: (id) => set({ activeSlideshowId: id }),
+  setSlideshowQueueLoading: (loading) => set({ slideshowQueueLoading: loading }),
+
+  advanceSlideshowQueue: () =>
+    set((state) => {
+      if (state.slideshowQueueEntries.length === 0) {
+        return {};
+      }
+      const currentIndex = state.activeSlideshowEntryId
+        ? state.slideshowQueueEntries.findIndex((entry) => entry.id === state.activeSlideshowEntryId)
+        : 0;
+      const nextEntry = state.slideshowQueueEntries[currentIndex + 1];
+      if (!nextEntry) {
+        return {
+          currentSlidePath: null,
+          activeSlideshowEntryId: null,
+          autoSlideEnabled: false,
+        };
+      }
+      return {
+        currentSlidePath: nextEntry.sourcePath,
+        activeSlideshowEntryId: nextEntry.id,
+      };
+    }),
+
+  moveSlideshowQueueEntry: (entryId, targetIndex) =>
+    set((state) => {
+      const currentIndex = state.slideshowQueueEntries.findIndex((entry) => entry.id === entryId);
+      if (currentIndex === -1) {
+        return {};
+      }
+      const normalizedTarget = clampPosition(targetIndex, state.slideshowQueueEntries.length - 1);
+      if (currentIndex === normalizedTarget) {
+        return {};
+      }
+      const entries = [...state.slideshowQueueEntries];
+      const [entry] = entries.splice(currentIndex, 1);
+      entries.splice(normalizedTarget, 0, entry);
+      const partial: Partial<ViewerState> = {
+        slideshowQueueEntries: entries,
+      };
+      if (state.activeSlideshowEntryId === entryId) {
+        partial.activeSlideshowEntryId = entry.id;
+        partial.currentSlidePath = entry.sourcePath;
+      }
+      return partial;
+    }),
+
   setSidebarTab: (tab) => set({ sidebarTab: tab }),
 
   setSidebarWidth: (width) => set({ sidebarWidth: Math.min(500, Math.max(180, width)) }),
 
   setThumbnailPosition: (position) => set({ thumbnailPosition: position }),
+
+  toggleSlideshowManager: () => set((state) => ({ showSlideshowManager: !state.showSlideshowManager })),
 
   setAutoSlideEnabled: (enabled) => set({ autoSlideEnabled: enabled }),
 
@@ -258,12 +455,19 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       showFolderTree: false,
       sidebarTab: 'folders',
       showBookmarks: false,
+      showSlideshowManager: false,
       thumbnailPosition: 'sidebar',
       autoSlideEnabled: false,
       autoSlideInterval: 5000,
       autoSlideIntervalOverlay: { visible: false, value: 5000 },
       folderPositions: {},
       folderPositionsKey: null,
+      slideshowRoot: null,
+      currentSlidePath: null,
+      slideshowQueueEntries: [],
+      activeSlideshowEntryId: null,
+      slideshowQueueName: '',
+      activeSlideshowId: null,
       activeFolderId: null,
       searchQuery: '',
       bookmarks: [],

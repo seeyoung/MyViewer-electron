@@ -97,7 +97,32 @@ function runMigrations(database: Database.Database): void {
   ensureColumn(database, 'viewing_sessions', 'source_type', "TEXT NOT NULL DEFAULT 'archive'");
   ensureColumn(database, 'viewing_sessions', 'source_id', 'TEXT');
 
+  runMigrationFile(database, '003_create_slideshows.sql');
+
   console.log('Database migrations completed');
+}
+
+function runMigrationFile(database: Database.Database, filename: string): void {
+  const migrationsDir = path.join(__dirname, 'migrations');
+  let filePath = path.join(migrationsDir, filename);
+
+  if (!fs.existsSync(filePath)) {
+    const fallback = path.join(app.getAppPath(), 'src', 'main', 'db', 'migrations', filename);
+    if (fs.existsSync(fallback)) {
+      filePath = fallback;
+    } else {
+      console.warn(`Migration file not found: ${filename}`);
+      return;
+    }
+  }
+
+  try {
+    const sql = fs.readFileSync(filePath, 'utf-8');
+    database.exec(sql);
+  } catch (error) {
+    console.error(`Failed to run migration ${filename}:`, error);
+    throw error;
+  }
 }
 
 function ensureColumn(database: Database.Database, table: string, column: string, definition: string) {

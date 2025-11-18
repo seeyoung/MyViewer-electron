@@ -24,6 +24,8 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
   const setAutoSlideEnabled = useViewerStore(state => state.setAutoSlideEnabled);
   const setAutoSlideInterval = useViewerStore(state => state.setAutoSlideInterval);
   const autoSlideOverlay = useViewerStore(state => state.autoSlideIntervalOverlay);
+  const showSlideshowManager = useViewerStore(state => state.showSlideshowManager);
+  const toggleSlideshowManager = useViewerStore(state => state.toggleSlideshowManager);
   const showAutoSlideOverlay = useViewerStore(state => state.showAutoSlideOverlay);
 
   const totalPages = images.length;
@@ -175,6 +177,13 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
         </div>
 
         <div className="fullscreen-controls">
+          <button
+            onClick={toggleSlideshowManager}
+            className={`panel-button ${showSlideshowManager ? 'active' : ''}`}
+            title="Toggle slideshow queue panel"
+          >
+            {showSlideshowManager ? 'Hide Slideshow Queue' : 'Show Slideshow Queue'}
+          </button>
           <div className="autoslide-controls">
             <button
               onClick={handleToggleAutoSlide}
