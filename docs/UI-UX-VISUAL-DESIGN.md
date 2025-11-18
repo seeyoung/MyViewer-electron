@@ -174,6 +174,48 @@
 }
 ```
 
+**⚠️ 중요: 파일 생성 후 반드시 import 해야 합니다!**
+
+**방법 1: index.css에서 import (권장)**
+
+`src/renderer/index.css` 파일 맨 위에 추가:
+
+```css
+/* Design Tokens - 모든 스타일보다 먼저 로드 */
+@import './styles/design-tokens.css';
+
+/* 기존 스타일들 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+/* ... */
+```
+
+**방법 2: index.tsx에서 import**
+
+`src/renderer/index.tsx`에서 CSS import:
+
+```tsx
+import './styles/design-tokens.css';  // 디자인 토큰
+import './index.css';                 // 메인 스타일
+```
+
+**방법 3: Vite config에서 전역 CSS로 추가**
+
+`vite.config.ts`의 css 설정에 추가:
+
+```ts
+css: {
+  preprocessorOptions: {
+    css: {
+      additionalData: `@import "./src/renderer/styles/design-tokens.css";`
+    }
+  }
+}
+```
+
 ### 1.3 적용 방법
 
 #### 1.3.1 CSS 파일에서

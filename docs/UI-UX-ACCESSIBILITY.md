@@ -274,6 +274,7 @@
 
 // 수정 후 ✅
 <button
+  id="folders-tab"  // ⚠️ ID 필수: aria-labelledby와 연결
   onClick={() => setActiveTab('folders')}
   style={tabButtonStyle}
   role="tab"
@@ -287,29 +288,59 @@
 <div
   id="folders-panel"
   role="tabpanel"
-  aria-labelledby="folders-tab"
+  aria-labelledby="folders-tab"  // 위 버튼의 ID 참조
 >
   {/* 폴더 트리 */}
+</div>
+
+// Thumbnails 탭도 동일하게
+<button
+  id="thumbnails-tab"
+  onClick={() => setActiveTab('thumbnails')}
+  style={tabButtonStyle}
+  role="tab"
+  aria-selected={activeTab === 'thumbnails'}
+  aria-controls="thumbnails-panel"
+>
+  Thumbnails
+</button>
+
+<div
+  id="thumbnails-panel"
+  role="tabpanel"
+  aria-labelledby="thumbnails-tab"
+>
+  {/* 썸네일 그리드 */}
 </div>
 ```
 
 **폴더 아이템:**
 
+**참고:** 현재 코드는 이미 `<button>` 요소를 사용 중입니다. aria-label만 추가하면 됩니다.
+
 ```tsx
-// 수정 후 ✅
-<div
-  onClick={() => handleFolderClick(folder)}
-  role="button"
-  tabIndex={0}
-  aria-label={`Folder: ${folder.name}, ${folder.totalImages} images`}
-  onKeyDown={(e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      handleFolderClick(folder);
-    }
-  }}
+// 현재 코드 (src/renderer/components/viewer/FolderSidebar.tsx:118-127)
+<button
+  className={`folder-item ${activeFolderId === folder.path ? 'active' : ''}`}
+  style={{ paddingLeft: `${folder.depth * 12 + 8}px` }}
+  onClick={() => handleSelect(folder.path)}
+  title={folder.tooltip}
 >
-  {folder.name}
-</div>
+  <span className="name">{folder.name}</span>
+  <span className="count">{folder.imageCount}</span>
+</button>
+
+// 개선 후 ✅
+<button
+  className={`folder-item ${activeFolderId === folder.path ? 'active' : ''}`}
+  style={{ paddingLeft: `${folder.depth * 12 + 8}px` }}
+  onClick={() => handleSelect(folder.path)}
+  aria-label={`${folder.name}, ${folder.imageCount} images`}
+  aria-current={activeFolderId === folder.path ? 'true' : 'false'}
+>
+  <span className="name" aria-hidden="true">{folder.name}</span>
+  <span className="count" aria-hidden="true">{folder.imageCount}</span>
+</button>
 ```
 
 #### 3.3.3 BottomThumbnails.tsx
@@ -343,29 +374,64 @@
 
 **메인 이미지:**
 
-```tsx
-// 수정 후 ✅
-<Image
-  image={image}
-  alt={`Page ${currentPageIndex + 1} of ${totalPages}`}
-/>
+**중요:** Konva는 Canvas 기반이므로 DOM `alt` 속성이 무시됩니다. 대신 다음 방법을 사용하세요:
 
-// Konva Stage
-<Stage
-  role="img"
-  aria-label={`Image viewer: Page ${currentPageIndex + 1}`}
->
-  {/* ... */}
-</Stage>
+```tsx
+// 방법 1: 숨김 텍스트로 스크린 리더 지원 ✅
+const ImageViewer = () => {
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      {/* 스크린 리더 전용 텍스트 */}
+      <div
+        aria-live="polite"
+        aria-atomic="true"
+        style={{
+          position: 'absolute',
+          left: '-10000px',
+          width: '1px',
+          height: '1px',
+          overflow: 'hidden',
+        }}
+      >
+        {loading
+          ? 'Loading image...'
+          : `Viewing page ${currentPageIndex + 1} of ${totalPages}`}
+      </div>
+
+      {/* Konva Stage */}
+      <Stage
+        width={width}
+        height={height}
+        aria-label={`Image viewer showing page ${currentPageIndex + 1}`}
+      >
+        <Layer>
+          <Image image={image} />
+        </Layer>
+      </Stage>
+    </div>
+  );
+};
+```
+
+**방법 2: 상태 변경 시 aria-live 공지 (App.tsx에서 구현)**
+```tsx
+// src/renderer/App.tsx에 추가
+useEffect(() => {
+  if (currentPageIndex !== null && images.length > 0) {
+    setScreenReaderAnnouncement(
+      `Page ${currentPageIndex + 1} of ${images.length} loaded`
+    );
+  }
+}, [currentPageIndex, images.length]);
 ```
 
 ### 3.4 체크리스트
 
 - [ ] NavigationBar 모든 버튼에 aria-label
-- [ ] FolderSidebar 탭에 role="tab" 추가
-- [ ] 폴더 아이템에 role="button" 추가
+- [ ] FolderSidebar 탭에 role="tab" 및 ID 추가
+- [ ] 폴더 아이템에 aria-label 및 aria-current 추가
 - [ ] 썸네일에 aria-label 및 aria-current
-- [ ] ImageViewer에 alt 텍스트
+- [ ] ImageViewer에 숨김 텍스트 또는 aria-live 추가
 - [ ] 스크린 리더로 테스트 (NVDA, JAWS, VoiceOver)
 
 ---

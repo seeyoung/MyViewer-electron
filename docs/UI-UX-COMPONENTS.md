@@ -293,6 +293,12 @@ const WelcomeScreen = () => (
 
 ### 2.2 개선 방안
 
+**⚠️ 중요:** FitMode는 enum 타입입니다. 파일 상단에 import를 추가하세요:
+
+```tsx
+import { FitMode } from '@shared/types/ViewingSession';
+```
+
 #### 2.2.1 버튼 그룹화
 
 ```tsx
@@ -416,28 +422,28 @@ const WelcomeScreen = () => (
       style={{ display: 'flex', gap: 'var(--space-1)' }}
     >
       <button
-        className={`button button-icon ${fitMode === 'FIT_WIDTH' ? 'active' : ''}`}
-        onClick={() => setFitMode('FIT_WIDTH')}
+        className={`button button-icon ${fitMode === FitMode.FIT_WIDTH ? 'active' : ''}`}
+        onClick={() => setFitMode(FitMode.FIT_WIDTH)}
         aria-label="Fit to width"
-        aria-pressed={fitMode === 'FIT_WIDTH'}
+        aria-pressed={fitMode === FitMode.FIT_WIDTH}
         title="Fit width (W)"
       >
         ↔
       </button>
       <button
-        className={`button button-icon ${fitMode === 'FIT_HEIGHT' ? 'active' : ''}`}
-        onClick={() => setFitMode('FIT_HEIGHT')}
+        className={`button button-icon ${fitMode === FitMode.FIT_HEIGHT ? 'active' : ''}`}
+        onClick={() => setFitMode(FitMode.FIT_HEIGHT)}
         aria-label="Fit to height"
-        aria-pressed={fitMode === 'FIT_HEIGHT'}
+        aria-pressed={fitMode === FitMode.FIT_HEIGHT}
         title="Fit height (H)"
       >
         ↕
       </button>
       <button
-        className={`button button-icon ${fitMode === 'ACTUAL_SIZE' ? 'active' : ''}`}
-        onClick={() => setFitMode('ACTUAL_SIZE')}
+        className={`button button-icon ${fitMode === FitMode.ACTUAL_SIZE ? 'active' : ''}`}
+        onClick={() => setFitMode(FitMode.ACTUAL_SIZE)}
         aria-label="Actual size"
-        aria-pressed={fitMode === 'ACTUAL_SIZE'}
+        aria-pressed={fitMode === FitMode.ACTUAL_SIZE}
         title="Actual size (1)"
       >
         1:1
@@ -621,7 +627,7 @@ const handleDoubleClick = (e: KonvaEventObject<MouseEvent>) => {
       x: pointer.x - mousePointTo.x * newZoom,
       y: pointer.y - mousePointTo.y * newZoom,
     });
-    setFitMode('CUSTOM');
+    setFitMode(FitMode.CUSTOM);
   } else {
     // 줌 아웃 (리셋)
     handleFitToWidth();
