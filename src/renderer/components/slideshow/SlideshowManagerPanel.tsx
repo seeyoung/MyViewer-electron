@@ -30,7 +30,6 @@ const SlideshowManagerPanel: React.FC = () => {
   const addQueueEntry = useViewerStore(state => state.addSlideshowQueueEntry);
   const removeQueueEntry = useViewerStore(state => state.removeSlideshowQueueEntry);
   const moveQueueEntry = useViewerStore(state => state.moveSlideshowQueueEntry);
-  const clearQueue = useViewerStore(state => state.clearSlideshowQueue);
   const queueName = useViewerStore(state => state.slideshowQueueName);
   const setQueueName = useViewerStore(state => state.setSlideshowQueueName);
   const setSlideshowQueueFromSources = useViewerStore(state => state.setSlideshowQueueFromSources);
@@ -43,9 +42,7 @@ const SlideshowManagerPanel: React.FC = () => {
   const [savedSlideshows, setSavedSlideshows] = useState<Slideshow[]>([]);
   const [selectedSlideshowId, setSelectedSlideshowId] = useState<string>('');
   const [status, setStatus] = useState<StatusState>(null);
-  const [saving, setSaving] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
-  const [autoStartOnLoad, setAutoStartOnLoad] = useState(true);
   const { openArchive, openFolder } = useArchive();
   const autoSaveTimeout = useRef<NodeJS.Timeout | null>(null);
   const [draggingEntryId, setDraggingEntryId] = useState<string | null>(null);
@@ -65,16 +62,6 @@ const SlideshowManagerPanel: React.FC = () => {
   useEffect(() => {
     void refreshSavedSlideshows();
   }, [refreshSavedSlideshows]);
-
-  const duplicateNameExists = useMemo(() => {
-    if (!queueName.trim()) {
-      return false;
-    }
-    return savedSlideshows.some((item) =>
-      item.name.localeCompare(queueName.trim(), undefined, { sensitivity: 'accent' }) === 0 &&
-      item.id !== activeSlideshowId
-    );
-  }, [activeSlideshowId, queueName, savedSlideshows]);
 
   const addEntries = useCallback((entries: SlideshowQueueItemInput[], position?: number) => {
     let added = 0;
@@ -198,41 +185,6 @@ const SlideshowManagerPanel: React.FC = () => {
     slideshowQueueLoading,
   ]);
 
-  const handleSave = useCallback(async () => {
-    if (!queueEntries.length) {
-      setStatus({ type: 'error', message: 'Add at least one entry before saving.' });
-      return;
-    }
-    const trimmedName = queueName.trim();
-    if (!trimmedName) {
-      setStatus({ type: 'error', message: 'Enter a name for the slideshow list.' });
-      return;
-    }
-    if (!activeSlideshowId && duplicateNameExists) {
-      setStatus({ type: 'error', message: 'A list with that name already exists. Choose a different name.' });
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await persistQueue();
-      setStatus({ type: 'success', message: 'Slideshow saved.' });
-      setSelectedSlideshowId((current) => current || activeSlideshowId || '');
-    } catch (error: any) {
-      const message = error?.message || 'Failed to save slideshow.';
-      setStatus({ type: 'error', message });
-    } finally {
-      setSaving(false);
-    }
-  }, [
-    activeSlideshowId,
-    duplicateNameExists,
-    persistQueue,
-    queueEntries.length,
-    queueName,
-    setSelectedSlideshowId,
-  ]);
-
   const handleLoad = useCallback(async (slideshowId?: string) => {
     const targetId = slideshowId ?? selectedSlideshowId;
     if (!targetId) {
@@ -251,25 +203,17 @@ const SlideshowManagerPanel: React.FC = () => {
           sourceType: entry.sourceType,
           label: entry.label,
         })),
-        { name: result.slideshow.name, activeSlideshowId: result.slideshow.id, autoStart: autoStartOnLoad }
+        { name: result.slideshow.name, activeSlideshowId: result.slideshow.id, autoStart: true }
       );
       setQueueName(result.slideshow.name);
       setActiveSlideshowId(result.slideshow.id);
-      setStatus({ type: 'success', message: `Loaded "${result.slideshow.name}"${autoStartOnLoad ? ' and started playback.' : ''}` });
+      setStatus({ type: 'success', message: `Loaded "${result.slideshow.name}" and started playback.` });
     } catch (error: any) {
       setStatus({ type: 'error', message: error?.message || 'Failed to load slideshow.' });
     } finally {
       setSlideshowQueueLoading(false);
     }
-  }, [autoStartOnLoad, selectedSlideshowId, setActiveSlideshowId, setQueueName, setSlideshowQueueFromSources, setSlideshowQueueLoading]);
-
-  const handleClear = () => {
-    clearQueue();
-    setQueueName(DEFAULT_SLIDESHOW_NAME);
-    setActiveSlideshowId(null);
-    setSelectedSlideshowId('');
-    setStatus(null);
-  };
+  }, [selectedSlideshowId, setActiveSlideshowId, setQueueName, setSlideshowQueueFromSources, setSlideshowQueueLoading]);
 
   const handleStartAt = useCallback(
     (entryId: string) => {
@@ -364,17 +308,16 @@ const SlideshowManagerPanel: React.FC = () => {
           </div>
         </div>
 
-      <div
-        className={`slideshow-dropzone ${isDragActive ? 'active' : ''}`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        <p>Drag folders or archives here, or drag any Recent item into this box to enqueue it.</p>
-      </div>
-
       <ul className="slideshow-queue-list">
-        {queueEntries.length === 0 && <li className="empty">Queue is empty.</li>}
+        {queueEntries.length === 0 && (
+          <li
+            className="empty drop-target"
+            onDragOver={handleEntryDragOver(0)}
+            onDrop={handleEntryDrop(0)}
+          >
+            Queue is empty. Drop items here to start.
+          </li>
+        )}
         {queueEntries.map((entry, index) => (
           <li
             key={entry.id}
@@ -394,63 +337,12 @@ const SlideshowManagerPanel: React.FC = () => {
               <button onClick={() => handleStartAt(entry.id)}>
                 Play
               </button>
-              <button
-                onClick={() => moveQueueEntry(entry.id, index - 1)}
-                disabled={index === 0}
-                title="Move up"
-              >
-                ↑
-              </button>
-              <button
-                onClick={() => moveQueueEntry(entry.id, index + 1)}
-                disabled={index === queueEntries.length - 1}
-                title="Move down"
-              >
-                ↓
-              </button>
-              <button onClick={() => removeQueueEntry(entry.id)}>Remove</button>
+              <button className="icon-button" title="Remove" onClick={() => removeQueueEntry(entry.id)}>✕</button>
             </div>
           </li>
         ))}
-        <li
-          className={`drop-end ${dragOverIndex === queueEntries.length ? 'drag-over' : ''}`}
-          onDragOver={handleEntryDragOver(queueEntries.length)}
-          onDrop={handleEntryDrop(queueEntries.length)}
-        >
-          Drop items here to append
-        </li>
       </ul>
 
-      <div className="slideshow-queue-actions">
-        <input
-          type="text"
-          placeholder="Slideshow list name"
-          value={queueName}
-          onChange={(event) => setQueueName(event.target.value)}
-        />
-        <label className="auto-start-toggle">
-          <input
-            type="checkbox"
-            checked={autoStartOnLoad}
-            onChange={(event) => setAutoStartOnLoad(event.target.checked)}
-          />
-          저장된 목록을 불러올 때 자동으로 첫 항목 재생
-        </label>
-        <div className="action-buttons">
-          <button onClick={handleClear} disabled={!queueEntries.length && !queueName}>
-            Clear
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || !queueEntries.length || duplicateNameExists}
-          >
-            {activeSlideshowId ? 'Update List' : 'Save List'}
-          </button>
-        </div>
-      </div>
-      {duplicateNameExists && (
-        <p className="status error">A saved list with that name already exists.</p>
-      )}
       {status && <p className={`status ${status.type}`}>{status.message}</p>}
 
       <style>{`
@@ -496,19 +388,6 @@ const SlideshowManagerPanel: React.FC = () => {
           border: 1px solid rgba(255,255,255,0.2);
           border-radius: 4px;
           padding: 0.25rem 0.5rem;
-        }
-        .slideshow-dropzone {
-          border: 1px dashed rgba(255,255,255,0.4);
-          border-radius: 6px;
-          padding: 0.75rem;
-          text-align: center;
-          font-size: 0.95rem;
-          color: #e0e0e0;
-          transition: background 0.2s ease;
-          margin-bottom: 0.75rem;
-        }
-        .slideshow-dropzone.active {
-          background: rgba(0, 122, 204, 0.15);
         }
         .slideshow-queue-list {
           list-style: none;
@@ -559,53 +438,13 @@ const SlideshowManagerPanel: React.FC = () => {
         .entry-actions button {
           min-width: 48px;
         }
+        .entry-actions .icon-button {
+          min-width: 32px;
+          font-size: 1rem;
+          line-height: 1;
+        }
         .entry-actions button:disabled {
           opacity: 0.4;
-          cursor: not-allowed;
-        }
-        .slideshow-queue-list .drop-end {
-          text-align: center;
-          font-size: 0.9rem;
-          color: #aaa;
-          border: 1px dashed rgba(255,255,255,0.2);
-          padding: 0.5rem;
-          margin-top: 0.35rem;
-        }
-        .slideshow-queue-actions {
-          display: flex;
-          gap: 0.75rem;
-          align-items: center;
-          flex-wrap: wrap;
-        }
-        .slideshow-queue-actions input {
-          flex: 1;
-          padding: 0.4rem 0.5rem;
-          border-radius: 4px;
-          border: 1px solid rgba(255,255,255,0.2);
-          background: rgba(0,0,0,0.4);
-          color: #fff;
-        }
-        .auto-start-toggle {
-          display: flex;
-          gap: 0.35rem;
-          align-items: center;
-          color: #ddd;
-          font-size: 0.9rem;
-        }
-        .action-buttons {
-          display: flex;
-          gap: 0.5rem;
-        }
-        .action-buttons button {
-          padding: 0.4rem 0.75rem;
-          border-radius: 4px;
-          border: 1px solid rgba(255,255,255,0.2);
-          background: rgba(255,255,255,0.05);
-          color: #fff;
-          cursor: pointer;
-        }
-        .action-buttons button:disabled {
-          opacity: 0.5;
           cursor: not-allowed;
         }
         .status {
