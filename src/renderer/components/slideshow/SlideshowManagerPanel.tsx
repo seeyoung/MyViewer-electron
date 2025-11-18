@@ -342,12 +342,14 @@ const SlideshowManagerPanel: React.FC = () => {
           </div>
         )}
 
-      <ul className="slideshow-queue-list">
-        {queueEntries.length === 0 && (
-          <li
-            className="empty drop-target"
-            onDragOver={handleEntryDragOver(0)}
-            onDrop={handleEntryDrop(0)}
+        {status && <p className={`status ${status.type}`}>{status.message}</p>}
+
+        <ul className="slideshow-queue-list">
+          {queueEntries.length === 0 && (
+            <li
+              className="empty drop-target"
+              onDragOver={handleEntryDragOver(0)}
+              onDrop={handleEntryDrop(0)}
           >
             Queue is empty. Drop items here to start.
           </li>
@@ -375,9 +377,17 @@ const SlideshowManagerPanel: React.FC = () => {
             </div>
           </li>
         ))}
-      </ul>
-
-      {status && <p className={`status ${status.type}`}>{status.message}</p>}
+        {queueEntries.length > 0 && (
+          <li
+            className={`drop-target bottom-drop-target ${dragOverIndex === queueEntries.length ? 'drag-over' : ''}`}
+            onDragOver={handleEntryDragOver(queueEntries.length)}
+            onDrop={handleEntryDrop(queueEntries.length)}
+            onDragLeave={handleDragEnd}
+          >
+            Drop here to append to queue
+          </li>
+        )}
+        </ul>
 
       <style>{`
         .slideshow-loading-modal {
@@ -403,6 +413,10 @@ const SlideshowManagerPanel: React.FC = () => {
           border: 1px solid rgba(255,255,255,0.1);
           border-radius: 8px;
           background: rgba(10,10,10,0.6);
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          min-height: 0;
         }
         .panel-row {
           display: flex;
@@ -451,7 +465,8 @@ const SlideshowManagerPanel: React.FC = () => {
           display: flex;
           flex-direction: column;
           gap: 0.35rem;
-          max-height: 200px;
+          flex: 1;
+          min-height: 0;
           overflow-y: auto;
         }
         .slideshow-queue-list li {
@@ -486,6 +501,13 @@ const SlideshowManagerPanel: React.FC = () => {
           justify-content: center;
           color: #aaa;
         }
+        .slideshow-queue-list li.bottom-drop-target {
+          min-height: 48px;
+          justify-content: center;
+          font-style: italic;
+          color: #bbb;
+          border: 1px dashed rgba(255,255,255,0.1);
+        }
         .entry-actions {
           display: flex;
           gap: 0.25rem;
@@ -503,7 +525,11 @@ const SlideshowManagerPanel: React.FC = () => {
           cursor: not-allowed;
         }
         .status {
-          margin-top: 0.5rem;
+          margin: 0 0 0.5rem 0;
+          padding: 0.4rem 0.6rem;
+          border-radius: 4px;
+          background: rgba(0,0,0,0.4);
+          border: 1px solid rgba(255,255,255,0.15);
           font-size: 0.9rem;
         }
         .status.success {
