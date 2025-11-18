@@ -306,12 +306,16 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       const resolvedName =
         metadata?.name ??
         (state.activeSlideshowId ? state.slideshowQueueName : DEFAULT_SLIDESHOW_NAME);
+      const hasExplicitId = metadata ? Object.prototype.hasOwnProperty.call(metadata, 'activeSlideshowId') : false;
+      const resolvedActiveId = hasExplicitId
+        ? metadata!.activeSlideshowId ?? null
+        : state.activeSlideshowId ?? null;
       return {
         slideshowQueueEntries: queueEntries,
         activeSlideshowEntryId: activeEntry ? activeEntry.id : null,
         currentSlidePath: shouldAutoStart ? (activeEntry ? activeEntry.sourcePath : null) : state.currentSlidePath,
         slideshowQueueName: resolvedName,
-        activeSlideshowId: metadata?.activeSlideshowId ?? state.activeSlideshowId ?? null,
+        activeSlideshowId: resolvedActiveId,
       };
     }),
 

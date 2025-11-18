@@ -47,6 +47,8 @@ const SlideshowManagerPanel: React.FC = () => {
   const autoSaveTimeout = useRef<NodeJS.Timeout | null>(null);
   const [draggingEntryId, setDraggingEntryId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(queueName);
 
   const refreshSavedSlideshows = useCallback(async () => {
     try {
@@ -257,6 +259,24 @@ const SlideshowManagerPanel: React.FC = () => {
     setDragOverIndex(null);
   };
 
+  const beginRename = () => {
+    setRenameValue(queueName);
+    setIsRenaming(true);
+  };
+
+  const confirmRename = () => {
+    const trimmed = renameValue.trim();
+    if (trimmed) {
+      setQueueName(trimmed);
+      setIsRenaming(false);
+    }
+  };
+
+  const cancelRename = () => {
+    setIsRenaming(false);
+    setRenameValue(queueName);
+  };
+
   useEffect(() => {
     if (slideshowQueueLoading) {
       return;
@@ -305,8 +325,22 @@ const SlideshowManagerPanel: React.FC = () => {
                 </option>
               ))}
             </select>
+            <button className="icon-button" title="Rename list" onClick={beginRename}>✎</button>
           </div>
         </div>
+
+        {isRenaming && (
+          <div className="rename-inline">
+            <input
+              type="text"
+              value={renameValue}
+              onChange={(event) => setRenameValue(event.target.value)}
+              autoFocus
+            />
+            <button onClick={confirmRename} disabled={!renameValue.trim()}>Save</button>
+            <button onClick={cancelRename}>Cancel</button>
+          </div>
+        )}
 
       <ul className="slideshow-queue-list">
         {queueEntries.length === 0 && (
@@ -388,6 +422,27 @@ const SlideshowManagerPanel: React.FC = () => {
           border: 1px solid rgba(255,255,255,0.2);
           border-radius: 4px;
           padding: 0.25rem 0.5rem;
+        }
+        .rename-inline {
+          display: flex;
+          gap: 0.5rem;
+          margin-bottom: 0.5rem;
+        }
+        .rename-inline input {
+          flex: 1;
+          padding: 0.3rem 0.4rem;
+          border-radius: 4px;
+          border: 1px solid rgba(255,255,255,0.2);
+          background: rgba(0,0,0,0.4);
+          color: #fff;
+        }
+        .rename-inline button {
+          padding: 0.3rem 0.75rem;
+          border-radius: 4px;
+          border: 1px solid rgba(255,255,255,0.2);
+          background: rgba(255,255,255,0.05);
+          color: #fff;
+          cursor: pointer;
         }
         .slideshow-queue-list {
           list-style: none;

@@ -36,6 +36,9 @@ function App() {
   const setSidebarTab = useViewerStore(state => state.setSidebarTab);
   const showSlideshowManager = useViewerStore(state => state.showSlideshowManager);
   const [viewerSize, setViewerSize] = useState({ width: 800, height: 600 });
+  const slideshowPanelWidth = showSlideshowManager ? 320 : 0;
+  const folderPanelWidth = showFolderTree && currentSource ? sidebarWidth : 0;
+  const imageWidth = Math.max(0, viewerSize.width - slideshowPanelWidth - folderPanelWidth);
 
   // Enable keyboard shortcuts
   console.log('⌨️ About to enable keyboard shortcuts...');
@@ -245,73 +248,81 @@ function App() {
               </div>
             </div>
           </div>
-          {showSlideshowManager && <SlideshowManagerPanel />}
         </header>
 
         {currentSource && <NavigationBar className={isFullscreen ? 'floating' : ''} />}
 
         <main className={`app-main ${isFullscreen ? 'fullscreen' : ''}`}>
-          <div className="viewer-layout">
-            {showFolderTree && currentSource && (
-              <div className="sidebar-wrapper">
-                <FolderSidebar />
-                <div
-                  className="sidebar-resizer"
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    const startX = event.clientX;
-                    const startWidth = sidebarWidth;
+          <div className={`viewer-layout ${showSlideshowManager ? 'with-slideshow' : ''}`}>
+            <div className="viewer-main">
+              <div className="viewer-body">
+                {showFolderTree && currentSource && (
+                  <div className="sidebar-wrapper">
+                    <FolderSidebar />
+                    <div
+                      className="sidebar-resizer"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        const startX = event.clientX;
+                        const startWidth = sidebarWidth;
 
-                    const handleMouseMove = (moveEvent: MouseEvent) => {
-                      const delta = moveEvent.clientX - startX;
-                      setSidebarWidth(startWidth + delta);
-                    };
+                        const handleMouseMove = (moveEvent: MouseEvent) => {
+                          const delta = moveEvent.clientX - startX;
+                          setSidebarWidth(startWidth + delta);
+                        };
 
-                    const handleMouseUp = () => {
-                      window.removeEventListener('mousemove', handleMouseMove);
-                      window.removeEventListener('mouseup', handleMouseUp);
-                      document.body.style.userSelect = '';
-                    };
+                        const handleMouseUp = () => {
+                          window.removeEventListener('mousemove', handleMouseMove);
+                          window.removeEventListener('mouseup', handleMouseUp);
+                          document.body.style.userSelect = '';
+                        };
 
-                    document.body.style.userSelect = 'none';
-                    window.addEventListener('mousemove', handleMouseMove);
-                    window.addEventListener('mouseup', handleMouseUp);
-                  }}
-                />
+                        document.body.style.userSelect = 'none';
+                        window.addEventListener('mousemove', handleMouseMove);
+                        window.addEventListener('mouseup', handleMouseUp);
+                      }}
+                    />
+                  </div>
+                )}
+                <div className="viewer-content" style={{ height: viewerSize.height }}>
+                  {isOpening || isLoading ? (
+                    <LoadingIndicator message="Loading source..." />
+                  ) : error ? (
+                    <div className="error-message">
+                      <h2>Error</h2>
+                      <p>{error}</p>
+                    </div>
+                  ) : currentSource ? (
+                    <ImageViewer width={imageWidth} height={viewerSize.height} />
+                  ) : (
+                    <div className="welcome-message">
+                      <h2>Welcome to MyViewer</h2>
+                      <p>Open an archive file or image folder to get started</p>
+                      <div className="supported-formats">
+                        <p>Supported formats:</p>
+                        <ul>
+                          <li>ZIP, CBZ (Comic Book ZIP)</li>
+                          <li>RAR, CBR (Comic Book RAR)</li>
+                          <li>7Z, TAR</li>
+                        </ul>
+                        <p className="hint">
+                          Use File → Open Archive (Cmd+O), File → Open Folder (Cmd+Shift+O), or drag & drop
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
+              {thumbnailPosition === 'bottom' && currentSource && (
+                <BottomThumbnails />
+              )}
+            </div>
+            {showSlideshowManager && (
+              <aside className="slideshow-side-panel">
+                <SlideshowManagerPanel />
+              </aside>
             )}
-            <div className="viewer-content">
-          {isOpening || isLoading ? (
-            <LoadingIndicator message="Loading source..." />
-          ) : error ? (
-            <div className="error-message">
-              <h2>Error</h2>
-              <p>{error}</p>
-            </div>
-          ) : currentSource ? (
-            <ImageViewer width={viewerSize.width} height={viewerSize.height} />
-          ) : (
-            <div className="welcome-message">
-              <h2>Welcome to MyViewer</h2>
-              <p>Open an archive file or image folder to get started</p>
-              <div className="supported-formats">
-                <p>Supported formats:</p>
-                <ul>
-                  <li>ZIP, CBZ (Comic Book ZIP)</li>
-                  <li>RAR, CBR (Comic Book RAR)</li>
-                  <li>7Z, TAR</li>
-                </ul>
-                <p className="hint">
-                  Use File → Open Archive (Cmd+O), File → Open Folder (Cmd+Shift+O), or drag & drop
-                </p>
-              </div>
-            </div>
-          )}
-            </div>
           </div>
-          {thumbnailPosition === 'bottom' && currentSource && (
-            <BottomThumbnails />
-          )}
         </main>
       </div>
     </ErrorBoundary>

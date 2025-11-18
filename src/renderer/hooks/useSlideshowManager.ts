@@ -16,13 +16,12 @@ export function useSlideshowManager() {
 
   const startSlideshowFromRoot = useCallback((root: SourceDescriptor, queue?: SlideshowQueueItemInput[]) => {
     const initialQueue = queue && queue.length ? queue : [toQueueEntry(root)];
-    const state = useViewerStore.getState();
-    const useDefault = state.activeSlideshowId === null;
     setSlideshowRoot(root);
     setSlideshowQueueFromSources(initialQueue, {
       activeIndex: 0,
-      name: useDefault ? DEFAULT_SLIDESHOW_NAME : state.slideshowQueueName,
-      activeSlideshowId: useDefault ? null : state.activeSlideshowId ?? null,
+      name: DEFAULT_SLIDESHOW_NAME,
+      activeSlideshowId: null,
+      autoStart: true,
     });
     setCurrentSlidePath(root.path);
   }, [setCurrentSlidePath, setSlideshowQueueFromSources, setSlideshowRoot]);
