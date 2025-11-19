@@ -71,6 +71,7 @@ import { SourceDescriptor, SourceType } from '@shared/types/Source';
 import { Image } from '@shared/types/Image';
 import { detectFormatFromExtension } from '@lib/image-utils';
 import fs from 'fs/promises';
+import { ensureSerializable } from '@shared/utils/serialization';
 
 // Service instances
 const archiveService = new ArchiveService();
@@ -150,21 +151,16 @@ export function initializeIpcHandlers(): void {
         lastActivityAt: session.lastActivityAt,
       };
 
-      // Use JSON.parse/stringify to ensure completely clean objects
       const result = {
         archive: serializableArchive,
         session: serializableSession,
         images: serializableImages,
       };
 
-      // Deep clone to remove any hidden references
-      const cleanResult = JSON.parse(JSON.stringify(result));
-      
-      console.log('🧹 Cleaned result:', {
-        archiveId: cleanResult.archive.id,
-        imageCount: cleanResult.images.length,
-        sessionId: cleanResult.session.id
-      });
+      // Use helper to ensure completely clean objects
+      const cleanResult = ensureSerializable(result);
+
+
 
       return cleanResult;
     })
@@ -328,31 +324,6 @@ export function initializeIpcHandlers(): void {
     })
   );
 
-  console.log('IPC handlers initialized');
-}
-
-/**
- * Helper: Get all images from folder tree recursively
- */
-function getAllImagesFromFolder(folder: any): any[] {
-  console.log('🔍 getAllImagesFromFolder called:', {
-    folderPath: folder.path || 'root',
-    directImages: folder.images?.length || 0,
-    childFolders: folder.childFolders?.length || 0
-  });
-
-  const images = [...(folder.images || [])];
-  console.log('📸 Direct images found:', images.length);
-
-  for (const childFolder of (folder.childFolders || [])) {
-    const childImages = getAllImagesFromFolder(childFolder);
-    console.log('📁 Child folder images:', childImages.length);
-    images.push(...childImages);
-  }
-
-  console.log('📊 Total images returned:', images.length);
-  return images;
-}
   registry.register(
     channels.FOLDER_OPEN,
     withErrorHandling(async (event, data: any) => {
@@ -392,6 +363,28 @@ function getAllImagesFromFolder(folder: any): any[] {
         rootFolder: result.rootFolder,
       };
 
-      return JSON.parse(JSON.stringify(response));
+      return ensureSerializable(response);
     })
   );
+
+
+}
+
+/**
+ * Helper: Get all images from folder tree recursively
+ */
+function getAllImagesFromFolder(folder: any): any[] {
+
+
+  const images = [...(folder.images || [])];
+
+
+  for (const childFolder of (folder.childFolders || [])) {
+    const childImages = getAllImagesFromFolder(childFolder);
+
+    images.push(...childImages);
+  }
+
+
+  return images;
+}

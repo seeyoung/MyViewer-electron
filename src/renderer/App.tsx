@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import ErrorBoundary from './components/shared/ErrorBoundary';
 import NavigationBar from './components/viewer/NavigationBar';
 import ImageViewer from './components/viewer/ImageViewer';
@@ -16,7 +16,7 @@ import SlideshowManagerPanel from './components/slideshow/SlideshowManagerPanel'
 import { RECENT_SOURCE_MIME } from '@shared/constants/drag';
 
 function App() {
-  console.log('🚀 App component is rendering!');
+
 
   const currentSource = useViewerStore(state => state.currentSource);
   const isLoading = useViewerStore(state => state.isLoading);
@@ -36,12 +36,21 @@ function App() {
   const setSidebarTab = useViewerStore(state => state.setSidebarTab);
   const showSlideshowManager = useViewerStore(state => state.showSlideshowManager);
   const [viewerSize, setViewerSize] = useState({ width: 800, height: 600 });
+
+  // State for floating toolbar visibility
+  const [isToolbarVisible, setIsToolbarVisible] = useState(false);
+  const toolbarTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const slideshowPanelWidth = showSlideshowManager ? 320 : 0;
   const folderPanelWidth = showFolderTree && currentSource ? sidebarWidth : 0;
   const imageWidth = Math.max(0, viewerSize.width - slideshowPanelWidth - folderPanelWidth);
 
+  // Refs for resizing calculation
+  const headerRef = useRef<HTMLDivElement>(null);
+  const navRef = useRef<HTMLDivElement>(null);
+
   // Enable keyboard shortcuts
-  console.log('⌨️ About to enable keyboard shortcuts...');
+
   useKeyboardShortcuts();
   useAutoSlide();
 
@@ -150,10 +159,9 @@ function App() {
   // Update viewer size on window resize
   useEffect(() => {
     const updateSize = () => {
-      const header = document.querySelector('.app-header');
-      const nav = document.querySelector('.navigation-bar');
-      const headerHeight = isFullscreen ? 0 : (header?.clientHeight || 0);
-      const navHeight = isFullscreen ? 0 : (nav?.clientHeight || 0);
+      const headerHeight = isFullscreen ? 0 : (headerRef.current?.clientHeight || 0);
+      // If nav is floating (fullscreen), it doesn't take up space in layout
+      const navHeight = isFullscreen ? 0 : (navRef.current?.clientHeight || 0);
       const bottomPanelHeight = (!isFullscreen && thumbnailPosition === 'bottom') ? 170 : 0;
       const availableHeight = isFullscreen
         ? window.innerHeight
@@ -173,10 +181,65 @@ function App() {
     };
   }, [currentSource, isFullscreen, thumbnailPosition]);
 
+  // Handle mouse move for floating toolbar
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isFullscreen) return;
+
+    const mouseY = e.clientY;
+    const threshold = 50; // Show toolbar when mouse is within 50px of top
+
+    if (mouseY < threshold) {
+      setIsToolbarVisible(true);
+
+      // Clear existing timeout
+      if (toolbarTimeoutRef.current) {
+        clearTimeout(toolbarTimeoutRef.current);
+      }
+
+      // Set timeout to hide toolbar after 2 seconds if mouse stays there (optional, but good UX)
+      // Actually, usually we keep it visible as long as mouse is there.
+      // But if mouse leaves the area, we hide it.
+      // Let's just set a timeout to hide it if no movement happens for a while?
+      // Or better: hide it when mouse leaves the threshold.
+
+      // The original logic had a timeout to hide it after 2000ms even if mouse is there?
+      // "Set timeout to hide toolbar after mouse leaves top area" - wait, the original logic set timeout inside the if block.
+      // Let's replicate a simple behavior: show if < threshold, hide if > threshold with delay.
+
+      // We'll use a timeout to auto-hide after some time if user is idle, or rely on mouse leave.
+      // Let's keep it simple:
+      // If in threshold, show.
+      // If out of threshold, hide after delay.
+    } else {
+      // Mouse moved away from top area
+      if (toolbarTimeoutRef.current) {
+        clearTimeout(toolbarTimeoutRef.current);
+      }
+      toolbarTimeoutRef.current = setTimeout(() => {
+        setIsToolbarVisible(false);
+      }, 500);
+    }
+  }, [isFullscreen]);
+
+  // Cleanup timeout
+  useEffect(() => {
+    return () => {
+      if (toolbarTimeoutRef.current) {
+        clearTimeout(toolbarTimeoutRef.current);
+      }
+    };
+  }, []);
+
   return (
     <ErrorBoundary>
-      <div className={`app ${isFullscreen ? 'fullscreen' : ''}`}>
-        <header className={`app-header ${isFullscreen ? 'hidden' : ''}`}>
+      <div
+        className={`app ${isFullscreen ? 'fullscreen' : ''}`}
+        onMouseMove={handleMouseMove}
+      >
+        <header
+          ref={headerRef}
+          className={`app-header ${isFullscreen ? 'hidden' : ''}`}
+        >
           <div className="header-title">
             <div>
               <h1>MyViewer</h1>
@@ -250,7 +313,11 @@ function App() {
           </div>
         </header>
 
-        {currentSource && <NavigationBar className={isFullscreen ? 'floating' : ''} />}
+        {currentSource && (
+          <div ref={navRef} style={{ width: '100%', position: isFullscreen ? 'fixed' : 'relative', zIndex: 100, top: 0 }}>
+            <NavigationBar className={`${isFullscreen ? 'floating' : ''} ${isToolbarVisible ? 'visible' : ''}`} />
+          </div>
+        )}
 
         <main className={`app-main ${isFullscreen ? 'fullscreen' : ''}`}>
           <div className={`viewer-layout ${showSlideshowManager ? 'with-slideshow' : ''}`}>

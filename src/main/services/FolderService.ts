@@ -7,6 +7,7 @@ import { SourceDescriptor, SourceType } from '@shared/types/Source';
 import { detectFormatFromExtension, isSupportedImageFormat } from '@lib/image-utils';
 import { getParentPath, sanitizePath, splitPath } from '@lib/file-utils';
 import { naturalSortBy } from '@lib/natural-sort';
+import { FolderTreeBuilder } from './FolderTreeBuilder';
 
 export interface FolderOpenResult {
   source: SourceDescriptor;
@@ -31,7 +32,7 @@ export class FolderService {
       img.archiveId = sourceId;
     });
 
-    const rootFolder = this.buildFolderTree(images, sourceId);
+    const rootFolder = FolderTreeBuilder.build(images, sourceId);
 
     const source: SourceDescriptor = {
       id: sourceId,
@@ -120,88 +121,5 @@ export class FolderService {
         isCorrupted: false,
       });
     }
-  }
-
-  private buildFolderTree(images: Image[], sourceId: string): FolderNode {
-    const root: FolderNode = {
-      id: randomUUID(),
-      archiveId: sourceId,
-      path: '/',
-      name: '',
-      parentId: undefined,
-      childFolders: [],
-      images: [],
-      totalImageCount: images.length,
-      directImageCount: 0,
-      isExpanded: true,
-    };
-
-    const folderMap = new Map<string, FolderNode>();
-    folderMap.set('/', root);
-
-    for (const image of images) {
-      const folderPath = getParentPath(image.pathInArchive) || '/';
-      const normalizedPath = folderPath === '' ? '/' : folderPath;
-
-      if (!folderMap.has(normalizedPath)) {
-        const segments = splitPath(normalizedPath);
-        let currentPath = '/';
-
-        for (let i = 0; i < segments.length; i++) {
-          const segment = segments[i];
-          const parentPath = currentPath;
-          currentPath = currentPath === '/' ? `/${segment}` : `${currentPath}/${segment}`;
-
-          if (!folderMap.has(currentPath)) {
-            const folder: FolderNode = {
-              id: randomUUID(),
-              archiveId: sourceId,
-              path: currentPath,
-              name: segment,
-              parentId: folderMap.get(parentPath)?.id,
-              childFolders: [],
-              images: [],
-              totalImageCount: 0,
-              directImageCount: 0,
-              isExpanded: false,
-            };
-
-            folderMap.set(currentPath, folder);
-            const parent = folderMap.get(parentPath);
-            if (parent) {
-              parent.childFolders.push(folder);
-            }
-          }
-        }
-      }
-
-      const lookupPath = normalizedPath === '/' ? '/' : `/${normalizedPath}`;
-      const folder = folderMap.get(lookupPath) || folderMap.get(normalizedPath);
-      if (folder) {
-        folder.images.push(image);
-        folder.directImageCount++;
-      }
-    }
-
-    const calculateTotalCount = (node: FolderNode): number => {
-      let total = node.directImageCount;
-      for (const child of node.childFolders) {
-        total += calculateTotalCount(child);
-      }
-      node.totalImageCount = total;
-      return total;
-    };
-
-    calculateTotalCount(root);
-
-    const sortNode = (node: FolderNode): void => {
-      node.childFolders = naturalSortBy(node.childFolders, 'name');
-      node.images = naturalSortBy(node.images, 'fileName');
-      node.childFolders.forEach(sortNode);
-    };
-
-    sortNode(root);
-
-    return root;
   }
 }

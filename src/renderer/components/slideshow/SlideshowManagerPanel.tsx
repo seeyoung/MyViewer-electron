@@ -1,11 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { DEFAULT_SLIDESHOW_NAME, useViewerStore } from '@renderer/store/viewerStore';
 import ipcClient from '@renderer/services/ipc';
 import * as channels from '@shared/constants/ipc-channels';
 import { SourceDescriptor, SourceType } from '@shared/types/Source';
 import { Slideshow, SlideshowEntry, SlideshowQueueItemInput } from '@shared/types/slideshow';
 import { RECENT_SOURCE_MIME } from '@shared/constants/drag';
-import { useArchive } from '@renderer/hooks/useArchive';
+import { SlideshowQueueList } from './SlideshowQueueList';
+import { SlideshowControls } from './SlideshowControls';
 
 interface SlideshowWithEntriesResult {
   slideshow: Slideshow;
@@ -39,14 +40,11 @@ const SlideshowManagerPanel: React.FC = () => {
   const setCurrentSlidePath = useViewerStore(state => state.setCurrentSlidePath);
   const slideshowQueueLoading = useViewerStore(state => state.slideshowQueueLoading);
   const setSlideshowQueueLoading = useViewerStore(state => state.setSlideshowQueueLoading);
+
   const [savedSlideshows, setSavedSlideshows] = useState<Slideshow[]>([]);
   const [selectedSlideshowId, setSelectedSlideshowId] = useState<string>('');
   const [status, setStatus] = useState<StatusState>(null);
-  const [isDragActive, setIsDragActive] = useState(false);
-  const { openArchive, openFolder } = useArchive();
   const autoSaveTimeout = useRef<NodeJS.Timeout | null>(null);
-  const [draggingEntryId, setDraggingEntryId] = useState<string | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(queueName);
 
@@ -113,25 +111,6 @@ const SlideshowManagerPanel: React.FC = () => {
       addEntries(additions, insertIndex);
     }
   }, [addEntries]);
-
-  const handleDrop = useCallback(async (event: React.DragEvent<HTMLDivElement>) => {
-    setIsDragActive(false);
-    await processDropEvent(event);
-  }, [processDropEvent]);
-
-  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!isDragActive) {
-      setIsDragActive(true);
-    }
-  };
-
-  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setIsDragActive(false);
-  };
 
   const persistQueue = useCallback(async () => {
     if (slideshowQueueLoading) {
@@ -229,36 +208,6 @@ const SlideshowManagerPanel: React.FC = () => {
     [queueEntries, setActiveSlideshowEntryId, setCurrentSlidePath]
   );
 
-  const handleEntryDragStart = (entryId: string) => (event: React.DragEvent<HTMLLIElement>) => {
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('application/x-slideshow-entry', entryId);
-    setDraggingEntryId(entryId);
-  };
-
-  const handleEntryDragOver = (index: number) => (event: React.DragEvent<HTMLLIElement>) => {
-    if (event.dataTransfer.types.includes(RECENT_SOURCE_MIME) || event.dataTransfer.files.length > 0 || draggingEntryId) {
-      event.preventDefault();
-      setDragOverIndex(index);
-    }
-  };
-
-  const handleEntryDrop = (index: number) => async (event: React.DragEvent<HTMLLIElement>) => {
-    event.preventDefault();
-    const internalId = event.dataTransfer.getData('application/x-slideshow-entry');
-    if (internalId) {
-      moveQueueEntry(internalId, index);
-    } else if (event.dataTransfer.files.length > 0 || event.dataTransfer.types.includes(RECENT_SOURCE_MIME)) {
-      await processDropEvent(event as unknown as React.DragEvent<HTMLElement>, index);
-    }
-    setDraggingEntryId(null);
-    setDragOverIndex(null);
-  };
-
-  const handleDragEnd = () => {
-    setDraggingEntryId(null);
-    setDragOverIndex(null);
-  };
-
   const beginRename = () => {
     setRenameValue(queueName);
     setIsRenaming(true);
@@ -305,241 +254,76 @@ const SlideshowManagerPanel: React.FC = () => {
         </div>
       )}
       <section className="slideshow-queue-panel">
-        <div className="panel-row">
-          <h3>Slideshow Queue</h3>
-          <div className="saved-selector">
-            <select
-              value={selectedSlideshowId}
-              onChange={(event) => {
-                const value = event.target.value;
-                setSelectedSlideshowId(value);
-                if (value) {
-                  void handleLoad(value);
-                }
-              }}
-            >
-              <option value="">Load saved list…</option>
-              {savedSlideshows.map((list) => (
-                <option key={list.id} value={list.id}>
-                  {list.name}
-                </option>
-              ))}
-            </select>
-            <button className="icon-button" title="Rename list" onClick={beginRename}>✎</button>
-          </div>
-        </div>
-
-        {isRenaming && (
-          <div className="rename-inline">
-            <input
-              type="text"
-              value={renameValue}
-              onChange={(event) => setRenameValue(event.target.value)}
-              autoFocus
-            />
-            <button onClick={confirmRename} disabled={!renameValue.trim()}>Save</button>
-            <button onClick={cancelRename}>Cancel</button>
-          </div>
-        )}
+        <SlideshowControls
+          savedSlideshows={savedSlideshows}
+          selectedSlideshowId={selectedSlideshowId}
+          onSelectSlideshow={(id) => {
+            setSelectedSlideshowId(id);
+            if (id) void handleLoad(id);
+          }}
+          onBeginRename={beginRename}
+          isRenaming={isRenaming}
+          renameValue={renameValue}
+          onRenameChange={setRenameValue}
+          onConfirmRename={confirmRename}
+          onCancelRename={cancelRename}
+        />
 
         {status && <p className={`status ${status.type}`}>{status.message}</p>}
 
-        <ul className="slideshow-queue-list">
-          {queueEntries.length === 0 && (
-            <li
-              className="empty drop-target"
-              onDragOver={handleEntryDragOver(0)}
-              onDrop={handleEntryDrop(0)}
-          >
-            Queue is empty. Drop items here to start.
-          </li>
-        )}
-        {queueEntries.map((entry, index) => (
-          <li
-            key={entry.id}
-            draggable
-            onDragStart={handleEntryDragStart(entry.id)}
-            onDragOver={handleEntryDragOver(index)}
-            onDrop={handleEntryDrop(index)}
-            onDragEnd={handleDragEnd}
-            className={dragOverIndex === index ? 'drag-over' : ''}
-          >
-            <div>
-              <span className="entry-index">{index + 1}.</span>
-              <span className="entry-label">{entry.label}</span>
-              <span className="entry-type">{entry.sourceType}</span>
-            </div>
-            <div className="entry-actions">
-              <button onClick={() => handleStartAt(entry.id)}>
-                Play
-              </button>
-              <button className="icon-button" title="Remove" onClick={() => removeQueueEntry(entry.id)}>✕</button>
-            </div>
-          </li>
-        ))}
-        {queueEntries.length > 0 && (
-          <li
-            className={`drop-target bottom-drop-target ${dragOverIndex === queueEntries.length ? 'drag-over' : ''}`}
-            onDragOver={handleEntryDragOver(queueEntries.length)}
-            onDrop={handleEntryDrop(queueEntries.length)}
-            onDragLeave={handleDragEnd}
-          >
-            Drop here to append to queue
-          </li>
-        )}
-        </ul>
+        <SlideshowQueueList
+          entries={queueEntries}
+          onRemove={removeQueueEntry}
+          onPlay={handleStartAt}
+          onMove={moveQueueEntry}
+          onDropExternal={processDropEvent}
+        />
 
-      <style>{`
-        .slideshow-loading-modal {
-          position: fixed;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.6);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 1000;
-        }
-        .slideshow-loading-modal .modal-content {
-          background: rgba(20, 20, 20, 0.95);
-          border: 1px solid rgba(255,255,255,0.2);
-          border-radius: 8px;
-          padding: 1.5rem 2rem;
-          color: #fff;
-          font-size: 1.1rem;
-        }
-        .slideshow-queue-panel {
-          margin-top: 1rem;
-          padding: 0.75rem;
-          border: 1px solid rgba(255,255,255,0.1);
-          border-radius: 8px;
-          background: rgba(10,10,10,0.6);
-          display: flex;
-          flex-direction: column;
-          height: 100%;
-          min-height: 0;
-        }
-        .panel-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 1rem;
-          margin-bottom: 0.5rem;
-        }
-        .saved-selector {
-          display: flex;
-          gap: 0.5rem;
-          align-items: center;
-        }
-        .saved-selector select {
-          background: #1c1c1c;
-          color: #fff;
-          border: 1px solid rgba(255,255,255,0.2);
-          border-radius: 4px;
-          padding: 0.25rem 0.5rem;
-        }
-        .rename-inline {
-          display: flex;
-          gap: 0.5rem;
-          margin-bottom: 0.5rem;
-        }
-        .rename-inline input {
-          flex: 1;
-          padding: 0.3rem 0.4rem;
-          border-radius: 4px;
-          border: 1px solid rgba(255,255,255,0.2);
-          background: rgba(0,0,0,0.4);
-          color: #fff;
-        }
-        .rename-inline button {
-          padding: 0.3rem 0.75rem;
-          border-radius: 4px;
-          border: 1px solid rgba(255,255,255,0.2);
-          background: rgba(255,255,255,0.05);
-          color: #fff;
-          cursor: pointer;
-        }
-        .slideshow-queue-list {
-          list-style: none;
-          padding: 0;
-          margin: 0 0 0.75rem 0;
-          display: flex;
-          flex-direction: column;
-          gap: 0.35rem;
-          flex: 1;
-          min-height: 0;
-          overflow-y: auto;
-        }
-        .slideshow-queue-list li {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 0.35rem 0.5rem;
-          border-radius: 4px;
-          background: rgba(255,255,255,0.03);
-        }
-        .slideshow-queue-list li .entry-label {
-          font-weight: 600;
-          margin-right: 0.5rem;
-        }
-        .slideshow-queue-list li .entry-type {
-          font-size: 0.85rem;
-          color: #aaa;
-        }
-        .slideshow-queue-list li.drag-over {
-          border: 1px dashed rgba(0, 122, 204, 0.8);
-          background: rgba(0, 122, 204, 0.15);
-        }
-        .slideshow-queue-list li button {
-          background: transparent;
-          border: 1px solid rgba(255,255,255,0.2);
-          border-radius: 4px;
-          color: #fff;
-          cursor: pointer;
-          padding: 0.2rem 0.5rem;
-        }
-        .slideshow-queue-list li.empty {
-          justify-content: center;
-          color: #aaa;
-        }
-        .slideshow-queue-list li.bottom-drop-target {
-          min-height: 48px;
-          justify-content: center;
-          font-style: italic;
-          color: #bbb;
-          border: 1px dashed rgba(255,255,255,0.1);
-        }
-        .entry-actions {
-          display: flex;
-          gap: 0.25rem;
-        }
-        .entry-actions button {
-          min-width: 48px;
-        }
-        .entry-actions .icon-button {
-          min-width: 32px;
-          font-size: 1rem;
-          line-height: 1;
-        }
-        .entry-actions button:disabled {
-          opacity: 0.4;
-          cursor: not-allowed;
-        }
-        .status {
-          margin: 0 0 0.5rem 0;
-          padding: 0.4rem 0.6rem;
-          border-radius: 4px;
-          background: rgba(0,0,0,0.4);
-          border: 1px solid rgba(255,255,255,0.15);
-          font-size: 0.9rem;
-        }
-        .status.success {
-          color: #7ad47a;
-        }
-        .status.error {
-          color: #ff9a9a;
-        }
-      `}</style>
-    </section>
+        <style>{`
+          .slideshow-loading-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+          }
+          .slideshow-loading-modal .modal-content {
+            background: rgba(20, 20, 20, 0.95);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            padding: 1.5rem 2rem;
+            color: #fff;
+            font-size: 1.1rem;
+          }
+          .slideshow-queue-panel {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            background: rgba(10,10,10,0.6);
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            min-height: 0;
+          }
+          .status {
+            margin: 0 0 0.5rem 0;
+            padding: 0.4rem 0.6rem;
+            border-radius: 4px;
+            background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.15);
+            font-size: 0.9rem;
+          }
+          .status.success {
+            color: #7ad47a;
+          }
+          .status.error {
+            color: #ff9a9a;
+          }
+        `}</style>
+      </section>
     </>
   );
 };

@@ -6,10 +6,25 @@ moduleAlias.addAliases({
   '@lib': require('path').join(__dirname, '../lib'),
 });
 
-import { app, BrowserWindow, Menu, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, Menu, dialog, ipcMain, protocol, net } from 'electron';
 import path from 'path';
 import { initializeDatabase, closeDatabase } from './db/init';
 import { initializeIpcHandlers } from './ipc/handlers';
+import { pathToFileURL } from 'url';
+
+// Register custom protocol as privileged
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'myviewer',
+    privileges: {
+      secure: true,
+      standard: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+    },
+  },
+]);
 
 let mainWindow: BrowserWindow | null = null;
 let pendingBossKeyMinimize = false;
@@ -22,7 +37,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      webSecurity: false, // Allow data URLs for images
+      webSecurity: true, // Enable webSecurity
     },
     title: 'MyViewer - Archive Image Viewer',
     show: false, // Don't show until ready-to-show
@@ -203,6 +218,22 @@ function initializeWindowHandlers() {
 }
 
 app.whenReady().then(() => {
+  // Register custom protocol
+  protocol.handle('myviewer', (request) => {
+    const url = request.url.replace('myviewer://', '');
+    // Decode URL to handle spaces and special characters
+    const decodedPath = decodeURIComponent(url);
+    
+    // Basic security check: ensure path is absolute and exists
+    // In a real app, you might want to validate against allowed directories
+    try {
+      return net.fetch(pathToFileURL(decodedPath).toString());
+    } catch (error) {
+      console.error('Failed to handle myviewer protocol:', error);
+      return new Response('Not Found', { status: 404 });
+    }
+  });
+
   // Initialize database
   initializeDatabase();
 

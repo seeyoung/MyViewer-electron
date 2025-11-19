@@ -12,6 +12,7 @@ import { naturalSortBy } from '@lib/natural-sort';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { FolderTreeBuilder } from './FolderTreeBuilder';
 
 /**
  * Archive Service
@@ -64,124 +65,6 @@ export class ArchiveService {
   }
 
   /**
-   * Build folder tree from image list
-   */
-  private buildFolderTree(images: Image[], archiveId: string): FolderNode {
-    const root: FolderNode = {
-      id: randomUUID(),
-      archiveId,
-      path: '/',
-      name: '',
-      parentId: undefined,
-      childFolders: [],
-      images: [],
-      totalImageCount: images.length,
-      directImageCount: 0,
-      isExpanded: true,
-    };
-
-    const folderMap = new Map<string, FolderNode>();
-    folderMap.set('/', root);
-
-    // Group images by folder
-    console.log('📂 Processing images for folder tree:', images.length);
-    
-    for (const image of images) {
-      const folderPath = getParentPath(image.pathInArchive) || '/';
-      const normalizedPath = folderPath === '' ? '/' : folderPath;
-      
-      console.log('🖼️  Processing image:', {
-        pathInArchive: image.pathInArchive,
-        folderPath,
-        normalizedPath,
-        fileName: image.fileName
-      });
-
-      console.log('🗂️  folderMap.has(' + normalizedPath + '):', folderMap.has(normalizedPath));
-      console.log('🗂️  folderMap keys:', Array.from(folderMap.keys()));
-
-      if (!folderMap.has(normalizedPath)) {
-        console.log('📁 Creating folder hierarchy for:', normalizedPath);
-        // Create folder hierarchy
-        const segments = splitPath(normalizedPath);
-        console.log('📂 Path segments:', segments);
-        let currentPath = '/';
-
-        for (let i = 0; i < segments.length; i++) {
-          const segment = segments[i];
-          const parentPath = currentPath;
-          currentPath = currentPath === '/' ? `/${segment}` : `${currentPath}/${segment}`;
-
-          if (!folderMap.has(currentPath)) {
-            console.log('🆕 Creating folder:', currentPath, 'segment:', segment);
-            const folder: FolderNode = {
-              id: randomUUID(),
-              archiveId,
-              path: currentPath,
-              name: segment,
-              parentId: folderMap.get(parentPath)?.id,
-              childFolders: [],
-              images: [],
-              totalImageCount: 0,
-              directImageCount: 0,
-              isExpanded: false,
-            };
-
-            folderMap.set(currentPath, folder);
-            console.log('✅ Folder created and added to map:', currentPath);
-
-            // Add to parent's children
-            const parent = folderMap.get(parentPath);
-            if (parent) {
-              parent.childFolders.push(folder);
-              console.log('✅ Added to parent folder:', parentPath);
-            }
-          } else {
-            console.log('📁 Folder already exists:', currentPath);
-          }
-        }
-      }
-
-      // Add image to folder - fix path consistency
-      const lookupPath = normalizedPath === '/' ? '/' : `/${normalizedPath}`;
-      console.log('🔍 Looking up folder with path:', lookupPath);
-      
-      const folder = folderMap.get(lookupPath);
-      if (folder) {
-        folder.images.push(image);
-        folder.directImageCount++;
-        console.log('✅ Image added to folder:', lookupPath, 'count:', folder.directImageCount);
-      } else {
-        console.log('❌ Folder not found for path:', lookupPath);
-        console.log('❌ Available paths:', Array.from(folderMap.keys()));
-      }
-    }
-
-    // Calculate total image counts
-    const calculateTotalCount = (node: FolderNode): number => {
-      let total = node.directImageCount;
-      for (const child of node.childFolders) {
-        total += calculateTotalCount(child);
-      }
-      node.totalImageCount = total;
-      return total;
-    };
-
-    calculateTotalCount(root);
-
-    // Sort folders and images
-    const sortNode = (node: FolderNode): void => {
-      node.childFolders = naturalSortBy(node.childFolders, 'name');
-      node.images = naturalSortBy(node.images, 'fileName');
-      node.childFolders.forEach(sortNode);
-    };
-
-    sortNode(root);
-
-    return root;
-  }
-
-  /**
    * Open an archive file
    */
   async openArchive(filePath: string, password?: string): Promise<Archive> {
@@ -218,9 +101,9 @@ export class ArchiveService {
     console.log('📋 Listing archive entries...');
     const entries = await reader.listEntries();
     console.log('📁 Total entries found:', entries.length);
-    
+
     entries.forEach((entry, i) => {
-      console.log(`${i+1}. ${entry.path} (${entry.isDirectory ? 'DIR' : 'FILE'})`);
+      console.log(`${i + 1}. ${entry.path} (${entry.isDirectory ? 'DIR' : 'FILE'})`);
     });
 
     // Filter for images
@@ -229,9 +112,9 @@ export class ArchiveService {
       entry => !entry.isDirectory && isSupportedImageFormat(entry.path)
     );
     console.log('🖼️  Image entries found:', imageEntries.length);
-    
+
     imageEntries.forEach((entry, i) => {
-      console.log(`  ${i+1}. ${entry.path} - ${isSupportedImageFormat(entry.path) ? 'SUPPORTED' : 'NOT SUPPORTED'}`);
+      console.log(`  ${i + 1}. ${entry.path} - ${isSupportedImageFormat(entry.path) ? 'SUPPORTED' : 'NOT SUPPORTED'}`);
     });
 
     // Create Image entities
@@ -271,8 +154,8 @@ export class ArchiveService {
       img.archiveId = archiveId;
     });
 
-    // Build folder tree
-    const rootFolder = this.buildFolderTree(sortedImages, archiveId);
+    // Build folder tree using the shared builder
+    const rootFolder = FolderTreeBuilder.build(sortedImages, archiveId);
 
     const archive: Archive = {
       id: archiveId,

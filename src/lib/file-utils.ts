@@ -18,24 +18,34 @@ export function sanitizePath(filePath: string): string {
   return normalized.replace(/^\/+/, '');
 }
 
+import fs from 'fs';
+
 /**
  * Validate that a path is safe to use
  * Throws error if path contains dangerous patterns
  */
 export function validatePath(filePath: string): void {
+  // Decode URI components if it looks like a URL
+  let decodedPath = filePath;
+  try {
+    decodedPath = decodeURIComponent(filePath);
+  } catch (e) {
+    // Ignore decoding errors, verify original path
+  }
+
   // Check for null bytes (can bypass security checks)
-  if (filePath.includes('\0')) {
+  if (decodedPath.includes('\0')) {
     throw new Error(`Null byte detected in path: ${filePath}`);
   }
 
   // Check for path traversal
-  const segments = filePath.split(/[/\\]+/).filter(Boolean);
+  const segments = decodedPath.split(/[/\\]+/).filter(Boolean);
   if (segments.some(segment => segment === '..')) {
     throw new Error(`Path traversal detected: ${filePath}`);
   }
 
   // Check for absolute paths (should use relative paths within archives)
-  if (path.isAbsolute(filePath)) {
+  if (path.isAbsolute(decodedPath)) {
     throw new Error(`Absolute path not allowed: ${filePath}`);
   }
 }

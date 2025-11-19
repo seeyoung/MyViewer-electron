@@ -4,12 +4,13 @@
  * Instead of: file1.jpg, file10.jpg, file2.jpg, file20.jpg
  */
 
-export function naturalSort(a: string, b: string): number {
-  // Regular expression to split strings into numeric and non-numeric parts
-  const re = /(\d+)|(\D+)/g;
+// Regular expression to split strings into numeric and non-numeric parts
+const RE_SPLIT = /(\d+)|(\D+)/g;
+const RE_NUMERIC = /^\d+$/;
 
-  const aParts = a.match(re) || [];
-  const bParts = b.match(re) || [];
+export function naturalSort(a: string, b: string): number {
+  const aParts = a.match(RE_SPLIT) || [];
+  const bParts = b.match(RE_SPLIT) || [];
 
   const maxLength = Math.max(aParts.length, bParts.length);
 
@@ -18,8 +19,8 @@ export function naturalSort(a: string, b: string): number {
     const bPart = bParts[i] || '';
 
     // Check if both parts are numeric
-    const aIsNum = /^\d+$/.test(aPart);
-    const bIsNum = /^\d+$/.test(bPart);
+    const aIsNum = RE_NUMERIC.test(aPart);
+    const bIsNum = RE_NUMERIC.test(bPart);
 
     if (aIsNum && bIsNum) {
       // Compare as numbers

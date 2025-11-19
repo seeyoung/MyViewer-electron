@@ -41,17 +41,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
 
   const currentImage = images[currentPageIndex];
 
-  // 디버깅 로그 추가
-  console.log('🔍 ImageViewer Debug:', {
-    imagesLength: images.length,
-    currentPageIndex,
-    currentImage: currentImage ? {
-      id: currentImage.id,
-      pathInArchive: currentImage.pathInArchive,
-      archiveId: currentImage.archiveId
-    } : null,
-    hasImage: !!image
-  });
+
 
   useEffect(() => {
     if (!currentImage) {
@@ -65,11 +55,8 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
   }, [currentImage]);
 
   const loadImageFromArchive = async (img: any) => {
-    console.log('📤 Loading image via IPC:', {
-      archiveId: img.archiveId,
-      imagePath: img.pathInArchive
-    });
-    
+
+
     try {
       // Load image via IPC
       const result = await window.electronAPI.invoke('image:load', {
@@ -83,11 +70,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
         throw new Error('Invalid response from image:load IPC');
       }
 
-      console.log('📥 IPC Response received:', {
-        hasData: !!result.data,
-        format: result.format,
-        dataLength: result.data?.length || 0
-      });
+
 
       // Create HTML image element
       const htmlImage = new window.Image();
@@ -100,7 +83,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
         setImage(null);
         setImageError('Failed to display this file.');
       };
-      
+
       // Set image data as base64 data URL
       htmlImage.src = `data:image/${result.format};base64,${result.data}`;
     } catch (error) {
@@ -227,14 +210,14 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
 
   const handleWheel = (e: any) => {
     e.evt.preventDefault();
-    
+
     // Check if Cmd (Mac) or Ctrl (Windows/Linux) is pressed
     const isZoomModifier = e.evt.metaKey || e.evt.ctrlKey;
-    
+
     if (isZoomModifier) {
       // More natural zoom with variable speed based on current zoom level
       let scaleBy = 1.05; // Slower, more precise zoom
-      
+
       // Adjust zoom sensitivity based on current zoom level for more natural feel
       if (effectiveZoom < 0.5) {
         scaleBy = 1.08; // Faster zoom when very zoomed out
@@ -250,17 +233,17 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
       const delta = e.evt.deltaY;
       const zoomDirection = delta > 0 ? -1 : 1;
       const zoomFactor = Math.pow(scaleBy, zoomDirection);
-      
+
       const newScale = oldScale * zoomFactor;
-      
+
       // Clamp zoom level between 0.05x and 20x (wider range for better UX)
       const clampedScale = Math.max(0.05, Math.min(20, newScale));
-      
+
       // Disable fit mode first to prevent interference
       if (fitMode !== FitMode.CUSTOM) {
         setFitMode(FitMode.CUSTOM);
       }
-      
+
       // Simple zoom without position adjustment
       setZoomLevel(clampedScale);
     } else {
@@ -268,48 +251,18 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
       const stage = e.target.getStage();
       const deltaX = e.evt.deltaX;
       const deltaY = e.evt.deltaY;
-      
+
       const newPos = {
         x: stagePosition.x - deltaX,
         y: stagePosition.y - deltaY,
       };
-      
+
       setStagePosition(constrainPosition(newPos));
     }
   };
 
-  // Handle mouse movement for floating toolbar in image fullscreen mode
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isFullscreen) return;
+  // Handle mouse movement for floating toolbar in image fullscreen mode - REMOVED (Moved to App.tsx)
 
-    const mouseY = e.clientY;
-    const threshold = 50; // Show toolbar when mouse is within 50px of top
-
-    const floatingToolbar = document.querySelector('.navigation-bar.floating');
-    if (floatingToolbar) {
-      if (mouseY < threshold) {
-        floatingToolbar.classList.add('visible');
-
-        // Clear existing timeout
-        if (toolbarTimeoutRef.current) {
-          clearTimeout(toolbarTimeoutRef.current);
-        }
-
-        // Set timeout to hide toolbar after mouse leaves top area
-        toolbarTimeoutRef.current = setTimeout(() => {
-          floatingToolbar.classList.remove('visible');
-        }, 2000);
-      } else {
-        // Hide toolbar when mouse moves away from top area
-        if (toolbarTimeoutRef.current) {
-          clearTimeout(toolbarTimeoutRef.current);
-        }
-        toolbarTimeoutRef.current = setTimeout(() => {
-          floatingToolbar.classList.remove('visible');
-        }, 500);
-      }
-    }
-  };
 
   if (!currentImage || !image) {
     return (
@@ -332,7 +285,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
     const stage = e.target;
     const newPos = { x: stage.x(), y: stage.y() };
     setStagePosition(constrainPosition(newPos));
-    
+
     // Switch to custom mode when dragging (except when already in custom mode)
     if (fitMode !== FitMode.CUSTOM) {
       setFitMode(FitMode.CUSTOM);
@@ -347,7 +300,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
         backgroundColor: isFullscreen ? '#000000' : '#1e1e1e',
         position: 'relative'
       }}
-      onMouseMove={handleMouseMove}
+      onMouseMove={undefined}
     >
       <Stage
         width={isFullscreen ? screenSize.width : width}
