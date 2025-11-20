@@ -50,10 +50,10 @@ const ImageViewer: React.FC<ImageViewerProps> = () => {
 
     const updateSize = () => {
       if (container) {
-        const width = container.clientWidth;
-        const height = container.clientHeight;
-        console.log('ImageViewer container size:', { width, height });
-        setContainerSize({ width, height });
+        setContainerSize({
+          width: container.clientWidth,
+          height: container.clientHeight,
+        });
       }
     };
 

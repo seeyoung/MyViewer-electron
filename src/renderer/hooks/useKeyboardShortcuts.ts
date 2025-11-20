@@ -12,7 +12,8 @@ export function useKeyboardShortcuts() {
   const autoSlideEnabled = useViewerStore(state => state.autoSlideEnabled);
   const autoSlideInterval = useViewerStore(state => state.autoSlideInterval);
   const setAutoSlideInterval = useViewerStore(state => state.setAutoSlideInterval);
-  const showAutoSlideOverlay = useViewerStore(state => state.showAutoSlideOverlay);
+  const setAutoSlideIntervalOverlay = useViewerStore(state => state.setAutoSlideIntervalOverlay);
+  const toggleAutoSlide = useViewerStore(state => state.toggleAutoSlide);
 
   useEffect(() => {
     console.log('⌨️  Initializing keyboard shortcuts...');
@@ -49,12 +50,17 @@ export function useKeyboardShortcuts() {
           window.electronAPI.send('window-toggle-fullscreen');
           break;
 
-        case ' ': // Space (without modifier)
+        case 'Space': // Space (without modifier)
           if (!event.ctrlKey && !event.metaKey) {
             event.preventDefault();
             // 다음 이미지
             goToNext();
           }
+          break;
+
+        case 'Backspace': // Backspace for previous image
+          event.preventDefault();
+          goToPrevious();
           break;
 
         case 'ArrowLeft':
@@ -68,7 +74,7 @@ export function useKeyboardShortcuts() {
             event.preventDefault();
             const nextInterval = Math.min(20000, autoSlideInterval + 1000);
             setAutoSlideInterval(nextInterval);
-            showAutoSlideOverlay(nextInterval);
+            setAutoSlideIntervalOverlay({ visible: true, value: nextInterval });
           }
           break;
 
@@ -77,7 +83,7 @@ export function useKeyboardShortcuts() {
             event.preventDefault();
             const nextInterval = Math.max(1000, autoSlideInterval - 1000);
             setAutoSlideInterval(nextInterval);
-            showAutoSlideOverlay(nextInterval);
+            setAutoSlideIntervalOverlay({ visible: true, value: nextInterval });
           }
           break;
 
@@ -93,26 +99,43 @@ export function useKeyboardShortcuts() {
 
         case 'Equal':
         case 'NumpadAdd':
+          event.preventDefault();
           if (event.ctrlKey || event.metaKey) {
-            event.preventDefault();
             setZoomLevel(zoomLevel * 1.2);
+          } else {
+            // + without modifier: zoom in
+            setZoomLevel(zoomLevel * 1.2);
+            setFitMode(FitMode.CUSTOM);
           }
           break;
 
         case 'Minus':
         case 'NumpadSubtract':
+          event.preventDefault();
           if (event.ctrlKey || event.metaKey) {
-            event.preventDefault();
             setZoomLevel(zoomLevel / 1.2);
+          } else {
+            // - without modifier: zoom out
+            setZoomLevel(zoomLevel / 1.2);
+            setFitMode(FitMode.CUSTOM);
           }
           break;
 
         case 'Digit0':
         case 'Numpad0':
+          event.preventDefault();
           if (event.ctrlKey || event.metaKey) {
-            event.preventDefault();
             setZoomLevel(1.0);
+          } else {
+            // 0 without modifier: actual size
+            setZoomLevel(1.0);
+            setFitMode(FitMode.ACTUAL_SIZE);
           }
+          break;
+
+        case 'KeyS': // S for slideshow toggle
+          event.preventDefault();
+          toggleAutoSlide();
           break;
 
         case 'KeyO':
@@ -129,6 +152,11 @@ export function useKeyboardShortcuts() {
         case 'KeyH':
           event.preventDefault();
           setFitMode(FitMode.FIT_HEIGHT);
+          break;
+
+        case 'KeyF': // F for fit to screen
+          event.preventDefault();
+          setFitMode(FitMode.FIT_WIDTH);
           break;
 
         case 'Escape':
@@ -208,6 +236,7 @@ export function useKeyboardShortcuts() {
     autoSlideEnabled,
     autoSlideInterval,
     setAutoSlideInterval,
-    showAutoSlideOverlay,
+    setAutoSlideIntervalOverlay,
+    toggleAutoSlide,
   ]);
 }

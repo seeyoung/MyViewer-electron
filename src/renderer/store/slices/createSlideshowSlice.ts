@@ -32,6 +32,7 @@ export interface SlideshowSlice {
     setSlideshowQueueLoading: (loading: boolean) => void;
     moveSlideshowQueueEntry: (entryId: string, targetIndex: number) => void;
     setAutoSlideEnabled: (enabled: boolean) => void;
+    toggleAutoSlide: () => void;
     setAutoSlideInterval: (interval: number) => void;
     setAutoSlideIntervalOverlay: (overlay: { visible: boolean; value: number }) => void;
 }
@@ -140,7 +141,9 @@ export const createSlideshowSlice: StateCreator<ViewerState, [], [], SlideshowSl
         return { slideshowQueueEntries: newQueue };
     }),
 
+
     setAutoSlideEnabled: (enabled) => set({ autoSlideEnabled: enabled }),
+    toggleAutoSlide: () => set((state) => ({ autoSlideEnabled: !state.autoSlideEnabled })),
     setAutoSlideInterval: (interval) => set({ autoSlideInterval: interval }),
     setAutoSlideIntervalOverlay: (overlay) => set({ autoSlideIntervalOverlay: overlay }),
 });
