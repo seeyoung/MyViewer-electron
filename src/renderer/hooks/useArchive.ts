@@ -61,7 +61,7 @@ export function useArchive() {
       });
       loadFolderPositions();
       setImages(images);
-      setSession(session);
+      setSession(session, { userOpen });
 
       const descriptor = {
         id: archive.id,
@@ -115,7 +115,7 @@ export function useArchive() {
       setSource(source);
       loadFolderPositions();
       setImages(images);
-      setSession(session);
+      setSession(session, { userOpen });
 
       if (userOpen) {
         addRecentSource(source);

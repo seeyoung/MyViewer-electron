@@ -35,7 +35,7 @@ export interface ViewerSlice {
 
     // Actions
     setSource: (source: SourceDescriptor) => void;
-    setSession: (session: ViewingSession | null) => void;
+    setSession: (session: ViewingSession | null, options?: { userOpen?: boolean }) => void;
     setImages: (images: Image[]) => void;
     navigateToPage: (index: number) => void;
     setViewMode: (mode: ViewMode) => void;
@@ -67,17 +67,25 @@ export const createViewerSlice: StateCreator<ViewerState, [], [], ViewerSlice> =
     error: null,
 
     setSource: (source) => set({ currentSource: source }),
-    setSession: (session) => set((state) => {
+    setSession: (session, options) => set((state) => {
         if (!session) {
             return { currentSession: null };
         }
+
+        const { userOpen = false } = options || {};
+
         return {
             currentSession: session,
             currentPageIndex: session.currentPageIndex,
             readingDirection: session.readingDirection,
             viewMode: session.viewMode,
             zoomLevel: session.zoomLevel,
-            fitMode: session.fitMode,
+            // If userOpen and starting from page 0 (new open), use FIT_HEIGHT as default
+            // If userOpen and resuming (page > 0), use session's fitMode
+            // If slideshow (userOpen=false), preserve current state's fitMode
+            fitMode: (userOpen && session.currentPageIndex === 0)
+                ? FitMode.FIT_HEIGHT
+                : (userOpen ? session.fitMode : state.fitMode),
             rotation: session.rotation,
             activeFolderId: session.activeFolderId,
             searchQuery: session.searchQuery,
