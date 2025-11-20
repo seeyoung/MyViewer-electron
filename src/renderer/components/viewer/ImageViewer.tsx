@@ -76,6 +76,7 @@ const ImageViewer: React.FC<ImageViewerProps> = () => {
       setImage(null);
       setImageError(null);
       setAutoRotation(0); // Reset auto-rotation
+      setStagePosition({ x: 0, y: 0 }); // Reset position
       return;
     }
 
@@ -102,6 +103,8 @@ const ImageViewer: React.FC<ImageViewerProps> = () => {
       htmlImage.onload = () => {
         setImage(htmlImage);
         setImageError(null);
+        // Reset position when new image is loaded
+        setStagePosition({ x: 0, y: 0 });
       };
       htmlImage.onerror = (error) => {
         console.error('Failed to load image data:', error);
@@ -203,8 +206,16 @@ const ImageViewer: React.FC<ImageViewerProps> = () => {
   const getImageBounds = () => {
     if (!image) return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
 
-    const imageWidth = image.width * effectiveZoom;
-    const imageHeight = image.height * effectiveZoom;
+    // Calculate image dimensions considering rotation
+    // If rotated -90°, width and height are swapped
+    const isRotated = autoRotation === -90;
+    const imageWidth = isRotated
+      ? image.height * effectiveZoom
+      : image.width * effectiveZoom;
+    const imageHeight = isRotated
+      ? image.width * effectiveZoom
+      : image.height * effectiveZoom;
+
     // Use fallback if container hasn't been measured yet
     const containerWidth = containerSize.width || 800;
     const containerHeight = containerSize.height || 600;
@@ -234,7 +245,7 @@ const ImageViewer: React.FC<ImageViewerProps> = () => {
     };
   };
 
-  // Recenter image when image, fitMode, zoomLevel, or containerSize changes
+  // Recenter image when image, fitMode, zoomLevel, autoRotation, or containerSize changes
   useEffect(() => {
     if (!image) return;
 
@@ -244,7 +255,6 @@ const ImageViewer: React.FC<ImageViewerProps> = () => {
 
     // Calculate the current effective zoom based on fitMode
     let currentZoom = 1.0;
-    let shouldRotate = false;
 
     if (fitMode !== FitMode.CUSTOM) {
       switch (fitMode) {
@@ -260,22 +270,15 @@ const ImageViewer: React.FC<ImageViewerProps> = () => {
           currentZoom = Math.min(widthRatio, heightRatio);
           break;
         case FitMode.FIT_BEST_AUTO_ROTATE: {
-          // Calculate zoom without rotation
-          const normalWidthRatio = containerWidth / image.width;
-          const normalHeightRatio = containerHeight / image.height;
-          const normalZoom = Math.min(normalWidthRatio, normalHeightRatio);
-
-          // Calculate zoom with 90° rotation (swap width/height)
-          const rotatedWidthRatio = containerWidth / image.height;
-          const rotatedHeightRatio = containerHeight / image.width;
-          const rotatedZoom = Math.min(rotatedWidthRatio, rotatedHeightRatio);
-
-          // Choose rotation that gives better zoom (larger image)
-          if (rotatedZoom > normalZoom * 1.1) {
-            shouldRotate = true;
-            currentZoom = rotatedZoom;
+          // Use autoRotation state to determine current rotation
+          if (autoRotation === -90) {
+            const rotatedWidthRatio = containerWidth / image.height;
+            const rotatedHeightRatio = containerHeight / image.width;
+            currentZoom = Math.min(rotatedWidthRatio, rotatedHeightRatio);
           } else {
-            currentZoom = normalZoom;
+            const normalWidthRatio = containerWidth / image.width;
+            const normalHeightRatio = containerHeight / image.height;
+            currentZoom = Math.min(normalWidthRatio, normalHeightRatio);
           }
           break;
         }
@@ -287,11 +290,12 @@ const ImageViewer: React.FC<ImageViewerProps> = () => {
       currentZoom = zoomLevel;
     }
 
-    // Calculate image dimensions (swap if rotated)
-    const imageWidth = shouldRotate
+    // Calculate image dimensions based on autoRotation state
+    const isRotated = autoRotation === -90;
+    const imageWidth = isRotated
       ? image.height * currentZoom
       : image.width * currentZoom;
-    const imageHeight = shouldRotate
+    const imageHeight = isRotated
       ? image.width * currentZoom
       : image.height * currentZoom;
 
@@ -303,7 +307,7 @@ const ImageViewer: React.FC<ImageViewerProps> = () => {
     const newPosition = constrainPosition({ x: centeredX, y: centeredY });
 
     setStagePosition(newPosition);
-  }, [image, fitMode, zoomLevel, containerSize.width, containerSize.height]);
+  }, [image, fitMode, zoomLevel, autoRotation, containerSize.width, containerSize.height]);
 
 
   // Cleanup timeout on unmount
