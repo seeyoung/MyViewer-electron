@@ -26,6 +26,8 @@ function App() {
   const showFolderTree = useViewerStore(state => state.showFolderTree);
   const recentSources = useViewerStore(state => state.recentSources);
   const setRecentSources = useViewerStore(state => state.setRecentSources);
+  const removeRecentSource = useViewerStore(state => state.removeRecentSource);
+
   const { openArchive, openFolder, isOpening } = useArchive();
   useSlideshowPlayback();
   const sidebarWidth = useViewerStore(state => state.sidebarWidth);
@@ -266,10 +268,14 @@ function App() {
                           }
                         }}
                         onClick={async () => {
-                          if (source.type === SourceType.FOLDER) {
-                            await openFolder(source.path);
-                          } else {
-                            await openArchive(source.path);
+                          try {
+                            if (source.type === SourceType.FOLDER) {
+                              await openFolder(source.path);
+                            } else {
+                              await openArchive(source.path);
+                            }
+                          } catch (error) {
+                            console.warn('Failed to open recent source:', error);
                           }
                         }}
                         title={source.path}

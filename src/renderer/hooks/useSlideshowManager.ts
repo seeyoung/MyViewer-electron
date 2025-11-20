@@ -14,14 +14,14 @@ export function useSlideshowManager() {
     label: source.label,
   });
 
-  const startSlideshowFromRoot = useCallback((root: SourceDescriptor, queue?: SlideshowQueueItemInput[]) => {
+  const startSlideshowFromRoot = useCallback((root: SourceDescriptor, queue?: SlideshowQueueItemInput[], autoStart: boolean = true) => {
     const initialQueue = queue && queue.length ? queue : [toQueueEntry(root)];
     setSlideshowRoot(root);
     setSlideshowQueueFromSources(initialQueue, {
       activeIndex: 0,
       name: DEFAULT_SLIDESHOW_NAME,
       activeSlideshowId: null,
-      autoStart: true,
+      autoStart,
     });
     setCurrentSlidePath(root.path);
   }, [setCurrentSlidePath, setSlideshowQueueFromSources, setSlideshowRoot]);

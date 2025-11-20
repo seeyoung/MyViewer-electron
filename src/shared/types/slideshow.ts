@@ -27,6 +27,7 @@ export interface SlideshowQueueItem {
   sourcePath: string;
   sourceType: SlideshowSourceType;
   label: string;
+  duration?: number;
 }
 
 export type SlideshowQueueItemInput = Omit<SlideshowQueueItem, 'id'>;

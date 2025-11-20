@@ -15,8 +15,13 @@ class IpcClient {
     try {
       const result = await this.electronAPI.invoke(channel, data);
       return result as T;
-    } catch (error) {
-      console.error(`IPC invoke error on channel "${channel}":`, error);
+    } catch (error: any) {
+      // Don't log ENOENT errors as errors, as they are often expected (e.g. missing files)
+      if (error?.message?.includes('ENOENT')) {
+        console.warn(`IPC invoke warning on channel "${channel}":`, error.message);
+      } else {
+        console.error(`IPC invoke error on channel "${channel}":`, error);
+      }
       throw error;
     }
   }

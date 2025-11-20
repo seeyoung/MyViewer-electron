@@ -59,6 +59,23 @@ This document summarizes the changes made to the `MyViewer-electron` project to 
 - **Change:** Removed debug `console.log` statements.
 - **Benefit:** Cleaner production logs and reduced noise.
 
+## 4. Advanced Refactoring (Phase 4)
+
+### Store Splitting
+- **File:** `src/renderer/store/viewerStore.ts`
+- **Change:** Split monolithic store into `viewerSlice`, `uiSlice`, and `slideshowSlice`.
+- **Benefit:** Improved maintainability and separation of concerns in the frontend state management.
+
+### IPC Handler Splitting
+- **File:** `src/main/ipc/handlers.ts`
+- **Change:** Extracted handlers into domain-specific files (`archiveHandlers`, `imageHandlers`, etc.) in `src/main/ipc/handlers/`.
+- **Benefit:** Reduced file size of `handlers.ts` from ~400 lines to ~100 lines, making it easier to navigate and maintain.
+
+### Async I/O Optimization
+- **File:** `src/main/services/RecentSourcesService.ts`
+- **Change:** Converted synchronous `fs.writeFileSync` to asynchronous `fs.promises.writeFile`.
+- **Benefit:** Prevents blocking the main process during file I/O operations.
+
 ## Verification
 - **Build:** `npm run build` passed successfully.
 - **Tests:** Manual verification of key flows (opening archives, slideshows, UI interactions) is recommended.

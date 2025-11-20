@@ -1,6 +1,7 @@
 import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import fsPromises from 'fs/promises';
 import { SourceDescriptor } from '@shared/types/Source';
 
 const MAX_RECENT = 10;
@@ -11,7 +12,7 @@ export class RecentSourcesService {
 
   constructor() {
     this.filePath = path.join(app.getPath('userData'), 'recent-sources.json');
-    this.load();
+    this.load(); // Initial load can be sync to ensure data is ready on startup
   }
 
   private load() {
@@ -29,9 +30,9 @@ export class RecentSourcesService {
     }
   }
 
-  private save() {
+  private async save() {
     try {
-      fs.writeFileSync(this.filePath, JSON.stringify(this.cache, null, 2));
+      await fsPromises.writeFile(this.filePath, JSON.stringify(this.cache, null, 2));
     } catch (error) {
       console.error('Failed to save recent sources:', error);
     }
@@ -41,18 +42,18 @@ export class RecentSourcesService {
     return [...this.cache];
   }
 
-  public add(source: SourceDescriptor) {
+  public async add(source: SourceDescriptor) {
     this.cache = [source, ...this.cache.filter((item) => !(item.path === source.path && item.type === source.type))].slice(0, MAX_RECENT);
-    this.save();
+    await this.save();
   }
 
-  public clear() {
+  public async clear() {
     this.cache = [];
-    this.save();
+    await this.save();
   }
 
-  public remove(source: SourceDescriptor) {
+  public async remove(source: SourceDescriptor) {
     this.cache = this.cache.filter((item) => !(item.path === source.path && item.type === source.type));
-    this.save();
+    await this.save();
   }
 }

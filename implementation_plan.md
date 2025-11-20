@@ -49,13 +49,23 @@ Refactor the MyViewer-electron codebase to address critical security vulnerabili
 #### [MODIFY] [App.tsx](file:///Users/seeyoung/projects/MyViewer-electron/src/renderer/App.tsx)
 - Replace `document.querySelector` with `useRef` / React state.
 
-### Phase 4: Cleanup (Low Priority)
+### Phase 4: Advanced Refactoring (Current Focus)
 
-#### [MODIFY] [natural-sort.ts](file:///Users/seeyoung/projects/MyViewer-electron/src/lib/natural-sort.ts)
-- Move regex to module scope.
+#### [NEW] [src/renderer/store/slices/](file:///Users/seeyoung/projects/MyViewer-electron/src/renderer/store/slices/)
+- Create `viewerSlice.ts`, `uiSlice.ts`, `slideshowSlice.ts`.
+
+#### [MODIFY] [viewerStore.ts](file:///Users/seeyoung/projects/MyViewer-electron/src/renderer/store/viewerStore.ts)
+- Refactor to combine slices using `create<ViewerState>()((...a) => ({ ...createViewerSlice(...a), ...createUISlice(...a), ... }))`.
+
+#### [NEW] [src/main/ipc/handlers/](file:///Users/seeyoung/projects/MyViewer-electron/src/main/ipc/handlers/)
+- Create `archiveHandlers.ts`, `imageHandlers.ts`, `sessionHandlers.ts`, `commonHandlers.ts`.
+
+#### [MODIFY] [handlers.ts](file:///Users/seeyoung/projects/MyViewer-electron/src/main/ipc/handlers.ts)
+- Import and register handlers from the new files.
 
 #### [MODIFY] [RecentSourcesService.ts](file:///Users/seeyoung/projects/MyViewer-electron/src/main/services/RecentSourcesService.ts)
-- Use async file I/O.
+- Convert `save()` to `async save()`.
+- Update usages in handlers to await the save operation.
 
 ## Verification Plan
 

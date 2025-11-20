@@ -16,16 +16,16 @@ interface FolderOpenOptions {
 
 export function useArchive() {
   const [isOpening, setIsOpening] = useState(false);
-  const setSource = useViewerStore(state => state.setSource);
-  const setImages = useViewerStore(state => state.setImages);
-  const setError = useViewerStore(state => state.setError);
   const navigateToPage = useViewerStore(state => state.navigateToPage);
   const setSession = useViewerStore(state => state.setSession);
   const addRecentSource = useViewerStore(state => state.addRecentSource);
   const loadFolderPositions = useViewerStore(state => state.loadFolderPositions);
-  const clearFolderPositions = useViewerStore(state => state.clearFolderPositions);
-  const { startSlideshowFromRoot } = useSlideshowManager();
+  const setSource = useViewerStore(state => state.setSource);
+  const setImages = useViewerStore(state => state.setImages);
+  const setError = useViewerStore(state => state.setError);
+
   const setSlideshowRoot = useViewerStore(state => state.setSlideshowRoot);
+  const { startSlideshowFromRoot } = useSlideshowManager();
 
   const openArchive = useCallback(async (filePath: string, options?: ArchiveOpenOptions) => {
     const { password, userOpen = true } = options ?? {};
@@ -59,9 +59,10 @@ export function useArchive() {
         path: archive.filePath,
         label: archive.fileName,
       });
-      loadFolderPositions(archive.filePath);
+      loadFolderPositions();
       setImages(images);
       setSession(session);
+
       const descriptor = {
         id: archive.id,
         type: SourceType.ARCHIVE,
@@ -77,7 +78,7 @@ export function useArchive() {
       }
 
       if (userOpen) {
-        startSlideshowFromRoot(descriptor);
+        startSlideshowFromRoot(descriptor, undefined, false);
       } else {
         setSlideshowRoot(descriptor);
       }
@@ -112,7 +113,7 @@ export function useArchive() {
       const { source, session, images } = result;
 
       setSource(source);
-      loadFolderPositions(source.path);
+      loadFolderPositions();
       setImages(images);
       setSession(session);
 
@@ -124,7 +125,7 @@ export function useArchive() {
       }
 
       if (userOpen) {
-        startSlideshowFromRoot(source);
+        startSlideshowFromRoot(source, undefined, false);
       } else {
         setSlideshowRoot(source);
       }
@@ -148,12 +149,13 @@ export function useArchive() {
   const closeArchive = useCallback(async (archiveId: string) => {
     try {
       await ipcClient.invoke(channels.ARCHIVE_CLOSE, { archiveId });
-      clearFolderPositions();
-      useViewerStore.getState().reset();
+      useViewerStore.getState().setSource(null as any);
+      useViewerStore.getState().setImages([]);
+      useViewerStore.getState().setSession(null);
     } catch (error) {
       console.error('Failed to close archive:', error);
     }
-  }, [clearFolderPositions]);
+  }, []);
 
   return {
     openArchive,
