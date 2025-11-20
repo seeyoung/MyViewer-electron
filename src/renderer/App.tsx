@@ -37,15 +37,10 @@ function App() {
   const sidebarTab = useViewerStore(state => state.sidebarTab);
   const setSidebarTab = useViewerStore(state => state.setSidebarTab);
   const showSlideshowManager = useViewerStore(state => state.showSlideshowManager);
-  const [viewerSize, setViewerSize] = useState({ width: 800, height: 600 });
 
   // State for floating toolbar visibility
   const [isToolbarVisible, setIsToolbarVisible] = useState(false);
   const toolbarTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const slideshowPanelWidth = showSlideshowManager ? 320 : 0;
-  const folderPanelWidth = showFolderTree && currentSource ? sidebarWidth : 0;
-  const imageWidth = Math.max(0, viewerSize.width - slideshowPanelWidth - folderPanelWidth);
 
   // Refs for resizing calculation
   const headerRef = useRef<HTMLDivElement>(null);
@@ -157,31 +152,6 @@ function App() {
       document.removeEventListener('dragover', handleDragOver);
     };
   }, [openArchive]);
-
-  // Update viewer size on window resize
-  useEffect(() => {
-    const updateSize = () => {
-      const headerHeight = isFullscreen ? 0 : (headerRef.current?.clientHeight || 0);
-      // If nav is floating (fullscreen), it doesn't take up space in layout
-      const navHeight = isFullscreen ? 0 : (navRef.current?.clientHeight || 0);
-      const bottomPanelHeight = (!isFullscreen && thumbnailPosition === 'bottom') ? 170 : 0;
-      const availableHeight = isFullscreen
-        ? window.innerHeight
-        : (window.innerHeight - headerHeight - navHeight - bottomPanelHeight);
-
-      setViewerSize({
-        width: window.innerWidth,
-        height: availableHeight,
-      });
-    };
-
-    updateSize();
-    window.addEventListener('resize', updateSize);
-
-    return () => {
-      window.removeEventListener('resize', updateSize);
-    };
-  }, [currentSource, isFullscreen, thumbnailPosition]);
 
   // Handle mouse move for floating toolbar
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
@@ -357,7 +327,7 @@ function App() {
                     />
                   </div>
                 )}
-                <div className="viewer-content" style={{ height: viewerSize.height }}>
+                <div className="viewer-content">
                   {isOpening || isLoading ? (
                     <LoadingIndicator message="Loading source..." />
                   ) : error ? (
@@ -366,7 +336,7 @@ function App() {
                       <p>{error}</p>
                     </div>
                   ) : currentSource ? (
-                    <ImageViewer width={imageWidth} height={viewerSize.height} />
+                    <ImageViewer />
                   ) : (
                     <div className="welcome-message">
                       <h2>Welcome to MyViewer</h2>
@@ -403,3 +373,4 @@ function App() {
 }
 
 export default App;
+

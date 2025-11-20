@@ -115,12 +115,15 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .viewer-body {
   display: flex;
   flex: 1;
   min-height: 0;
+  min-width: 0;
 }
 
 .viewer-layout.with-slideshow .viewer-main {
@@ -133,7 +136,7 @@ body {
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  border-left: 1px solid rgba(255,255,255,0.08);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(15, 15, 15, 0.85);
   padding: 0.5rem;
 }
@@ -157,6 +160,7 @@ body {
   background: rgba(255, 255, 255, 0.05);
   flex-shrink: 0;
 }
+
 .sidebar-resizer:hover {
   background: rgba(255, 255, 255, 0.1);
 }
@@ -168,6 +172,8 @@ body {
   justify-content: center;
   position: relative;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .welcome-message {
@@ -181,7 +187,7 @@ body {
   margin-bottom: 1rem;
 }
 
-.welcome-message > p {
+.welcome-message>p {
   font-size: 1.125rem;
   color: #999;
   margin-bottom: 2rem;

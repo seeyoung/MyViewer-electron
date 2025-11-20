@@ -19,11 +19,12 @@ const isImageLoadResponse = (value: unknown): value is ImageLoadResponse => {
 };
 
 interface ImageViewerProps {
-  width: number;
-  height: number;
+  // Props are now optional as we use ResizeObserver, but kept for compatibility if needed
+  width?: number;
+  height?: number;
 }
 
-const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
+const ImageViewer: React.FC<ImageViewerProps> = () => {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
   const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 });
@@ -36,12 +37,38 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
   const isFullscreen = useViewerStore(state => state.isFullscreen);
   const currentSource = useViewerStore(state => state.currentSource);
   const stageRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const toolbarTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const [screenSize, setScreenSize] = useState({ width: window.innerWidth, height: window.innerHeight });
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   const currentImage = images[currentPageIndex];
 
+  // ResizeObserver to measure container size
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
 
+    const updateSize = () => {
+      if (container) {
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+        console.log('ImageViewer container size:', { width, height });
+        setContainerSize({ width, height });
+      }
+    };
+
+    updateSize();
+
+    const observer = new ResizeObserver(() => {
+      updateSize();
+    });
+
+    observer.observe(container);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     if (!currentImage) {
@@ -55,8 +82,6 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
   }, [currentImage]);
 
   const loadImageFromArchive = async (img: any) => {
-
-
     try {
       // Load image via IPC
       const result = await window.electronAPI.invoke('image:load', {
@@ -69,8 +94,6 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
       if (!isImageLoadResponse(result)) {
         throw new Error('Invalid response from image:load IPC');
       }
-
-
 
       // Create HTML image element
       const htmlImage = new window.Image();
@@ -99,8 +122,9 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
 
     const imageWidth = image.width;
     const imageHeight = image.height;
-    const containerWidth = isFullscreen ? screenSize.width : width;
-    const containerHeight = isFullscreen ? screenSize.height : height;
+    // Use fallback if container hasn't been measured yet
+    const containerWidth = containerSize.width || 800;
+    const containerHeight = containerSize.height || 600;
 
     switch (fitMode) {
       case FitMode.FIT_WIDTH:
@@ -129,8 +153,9 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
 
     const imageWidth = image.width * effectiveZoom;
     const imageHeight = image.height * effectiveZoom;
-    const containerWidth = isFullscreen ? screenSize.width : width;
-    const containerHeight = isFullscreen ? screenSize.height : height;
+    // Use fallback if container hasn't been measured yet
+    const containerWidth = containerSize.width || 800;
+    const containerHeight = containerSize.height || 600;
 
     // If image is smaller than viewport, center it and don't allow panning
     if (imageWidth <= containerWidth && imageHeight <= containerHeight) {
@@ -157,35 +182,45 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
     };
   };
 
-  // Center the image when fit mode is active (only when mode changes, not during zoom)
+  // Recenter image when image, fitMode, zoomLevel, or containerSize changes
   useEffect(() => {
-    if (fitMode !== FitMode.CUSTOM && image) {
-      const containerWidth = isFullscreen ? screenSize.width : width;
-      const containerHeight = isFullscreen ? screenSize.height : height;
+    if (!image) return;
 
-      // Calculate zoom for the specific fit mode
-      let modeZoom = 1.0;
+    // Use fallback if container hasn't been measured yet
+    const containerWidth = containerSize.width || 800;
+    const containerHeight = containerSize.height || 600;
+
+    // Calculate the current effective zoom based on fitMode
+    let currentZoom = 1.0;
+    if (fitMode !== FitMode.CUSTOM) {
       switch (fitMode) {
         case FitMode.FIT_WIDTH:
-          modeZoom = containerWidth / image.width;
+          currentZoom = containerWidth / image.width;
           break;
         case FitMode.FIT_HEIGHT:
-          modeZoom = containerHeight / image.height;
+          currentZoom = containerHeight / image.height;
           break;
         case FitMode.ACTUAL_SIZE:
-          modeZoom = 1.0;
+          currentZoom = 1.0;
           break;
       }
-
-      const imageWidth = image.width * modeZoom;
-      const imageHeight = image.height * modeZoom;
-
-      setStagePosition({
-        x: (containerWidth - imageWidth) / 2,
-        y: (containerHeight - imageHeight) / 2,
-      });
+    } else {
+      currentZoom = zoomLevel;
     }
-  }, [fitMode, width, height, image, isFullscreen, screenSize]);
+
+    const imageWidth = image.width * currentZoom;
+    const imageHeight = image.height * currentZoom;
+
+    // Calculate centered position
+    const centeredX = (containerWidth - imageWidth) / 2;
+    const centeredY = (containerHeight - imageHeight) / 2;
+
+    // Constrain to bounds
+    const newPosition = constrainPosition({ x: centeredX, y: centeredY });
+
+    setStagePosition(newPosition);
+  }, [image, fitMode, zoomLevel, containerSize.width, containerSize.height]);
+
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -193,18 +228,6 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
       if (toolbarTimeoutRef.current) {
         clearTimeout(toolbarTimeoutRef.current);
       }
-    };
-  }, []);
-
-  // Update screen size on window resize
-  useEffect(() => {
-    const handleResize = () => {
-      setScreenSize({ width: window.innerWidth, height: window.innerHeight });
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => {
-      window.removeEventListener('resize', handleResize);
     };
   }, []);
 
@@ -261,19 +284,18 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
     }
   };
 
-  // Handle mouse movement for floating toolbar in image fullscreen mode - REMOVED (Moved to App.tsx)
-
-
   if (!currentImage || !image) {
     return (
       <div
+        ref={containerRef}
         style={{
-          width,
-          height,
+          width: '100%',
+          height: '100%',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           color: '#666',
+          backgroundColor: isFullscreen ? '#000000' : '#1e1e1e',
         }}
       >
         {currentImage ? (imageError || 'Loading image...') : 'No image selected'}
@@ -292,19 +314,24 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
     }
   };
 
+  // Use fallback dimensions if container hasn't been measured yet
+  const stageWidth = containerSize.width || 800;
+  const stageHeight = containerSize.height || 600;
+
   return (
     <div
+      ref={containerRef}
       style={{
-        width: isFullscreen ? screenSize.width : width,
-        height: isFullscreen ? screenSize.height : height,
+        width: '100%',
+        height: '100%',
         backgroundColor: isFullscreen ? '#000000' : '#1e1e1e',
-        position: 'relative'
+        position: 'relative',
+        overflow: 'hidden',
       }}
-      onMouseMove={undefined}
     >
       <Stage
-        width={isFullscreen ? screenSize.width : width}
-        height={isFullscreen ? screenSize.height : height}
+        width={stageWidth}
+        height={stageHeight}
         onWheel={handleWheel}
         onDragEnd={handleDragEnd}
         ref={stageRef}
@@ -327,3 +354,4 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ width, height }) => {
 };
 
 export default ImageViewer;
+
