@@ -11,6 +11,8 @@ export enum ReadingDirection {
 export enum FitMode {
   FIT_WIDTH = 'fit_width', // Fit to window width
   FIT_HEIGHT = 'fit_height', // Fit to window height
+  FIT_BEST = 'fit_best', // Fit entire image within window (maintain aspect ratio)
+  FIT_BEST_AUTO_ROTATE = 'fit_best_auto_rotate', // Fit best with auto-rotation if needed
   ACTUAL_SIZE = 'actual_size', // 100% (no scaling)
   CUSTOM = 'custom', // Manual zoom (use zoomLevel)
 }

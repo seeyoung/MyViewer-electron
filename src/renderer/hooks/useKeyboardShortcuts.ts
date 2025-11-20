@@ -154,9 +154,13 @@ export function useKeyboardShortcuts() {
           setFitMode(FitMode.FIT_HEIGHT);
           break;
 
-        case 'KeyF': // F for fit to screen
+        case 'KeyF': // F for fit to screen (best fit), Shift+F for auto-rotate
           event.preventDefault();
-          setFitMode(FitMode.FIT_WIDTH);
+          if (event.shiftKey) {
+            setFitMode(FitMode.FIT_BEST_AUTO_ROTATE);
+          } else {
+            setFitMode(FitMode.FIT_BEST);
+          }
           break;
 
         case 'Escape':

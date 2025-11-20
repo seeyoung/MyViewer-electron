@@ -28,6 +28,7 @@ const ImageViewer: React.FC<ImageViewerProps> = () => {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
   const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 });
+  const [autoRotation, setAutoRotation] = useState(0); // Auto-rotation for FIT_BEST_AUTO_ROTATE mode
   const currentPageIndex = useViewerStore(state => state.currentPageIndex);
   const images = useViewerStore(state => state.images);
   const zoomLevel = useViewerStore(state => state.zoomLevel);
@@ -74,6 +75,7 @@ const ImageViewer: React.FC<ImageViewerProps> = () => {
     if (!currentImage) {
       setImage(null);
       setImageError(null);
+      setAutoRotation(0); // Reset auto-rotation
       return;
     }
 
@@ -135,6 +137,27 @@ const ImageViewer: React.FC<ImageViewerProps> = () => {
         // Fit image height to screen height
         return containerHeight / imageHeight;
 
+      case FitMode.FIT_BEST:
+        // Fit entire image within window (use smaller of width/height ratios)
+        const widthRatio = containerWidth / imageWidth;
+        const heightRatio = containerHeight / imageHeight;
+        return Math.min(widthRatio, heightRatio);
+
+      case FitMode.FIT_BEST_AUTO_ROTATE: {
+        // Calculate zoom based on current autoRotation state
+        if (autoRotation === -90) {
+          // Calculate with rotation (swap width/height)
+          const rotatedWidthRatio = containerWidth / imageHeight;
+          const rotatedHeightRatio = containerHeight / imageWidth;
+          return Math.min(rotatedWidthRatio, rotatedHeightRatio);
+        } else {
+          // Calculate without rotation
+          const normalWidthRatio = containerWidth / imageWidth;
+          const normalHeightRatio = containerHeight / imageHeight;
+          return Math.min(normalWidthRatio, normalHeightRatio);
+        }
+      }
+
       case FitMode.ACTUAL_SIZE:
         // 100% actual size
         return 1.0;
@@ -146,6 +169,35 @@ const ImageViewer: React.FC<ImageViewerProps> = () => {
 
   // Use calculated zoom when fit mode is active, but ensure smooth transitions
   const effectiveZoom = fitMode !== FitMode.CUSTOM ? calculateFitZoom() : zoomLevel;
+
+  // Calculate auto-rotation for FIT_BEST_AUTO_ROTATE mode
+  useEffect(() => {
+    if (fitMode !== FitMode.FIT_BEST_AUTO_ROTATE || !image) {
+      // Reset rotation for other modes
+      if (fitMode !== FitMode.FIT_BEST_AUTO_ROTATE && autoRotation !== 0) {
+        setAutoRotation(0);
+      }
+      return;
+    }
+
+    const containerWidth = containerSize.width || 800;
+    const containerHeight = containerSize.height || 600;
+
+    // Calculate zoom without rotation
+    const normalWidthRatio = containerWidth / image.width;
+    const normalHeightRatio = containerHeight / image.height;
+    const normalZoom = Math.min(normalWidthRatio, normalHeightRatio);
+
+    // Calculate zoom with 90° rotation (swap width/height)
+    const rotatedWidthRatio = containerWidth / image.height;
+    const rotatedHeightRatio = containerHeight / image.width;
+    const rotatedZoom = Math.min(rotatedWidthRatio, rotatedHeightRatio);
+
+    // Choose rotation that gives better zoom (larger image)
+    // Use 10% threshold to avoid unnecessary rotation
+    const shouldRotate = rotatedZoom > normalZoom * 1.1;
+    setAutoRotation(shouldRotate ? -90 : 0); // -90 = counter-clockwise
+  }, [fitMode, image, containerSize.width, containerSize.height]);
 
   // Calculate image boundaries
   const getImageBounds = () => {
@@ -192,6 +244,8 @@ const ImageViewer: React.FC<ImageViewerProps> = () => {
 
     // Calculate the current effective zoom based on fitMode
     let currentZoom = 1.0;
+    let shouldRotate = false;
+
     if (fitMode !== FitMode.CUSTOM) {
       switch (fitMode) {
         case FitMode.FIT_WIDTH:
@@ -200,6 +254,31 @@ const ImageViewer: React.FC<ImageViewerProps> = () => {
         case FitMode.FIT_HEIGHT:
           currentZoom = containerHeight / image.height;
           break;
+        case FitMode.FIT_BEST:
+          const widthRatio = containerWidth / image.width;
+          const heightRatio = containerHeight / image.height;
+          currentZoom = Math.min(widthRatio, heightRatio);
+          break;
+        case FitMode.FIT_BEST_AUTO_ROTATE: {
+          // Calculate zoom without rotation
+          const normalWidthRatio = containerWidth / image.width;
+          const normalHeightRatio = containerHeight / image.height;
+          const normalZoom = Math.min(normalWidthRatio, normalHeightRatio);
+
+          // Calculate zoom with 90° rotation (swap width/height)
+          const rotatedWidthRatio = containerWidth / image.height;
+          const rotatedHeightRatio = containerHeight / image.width;
+          const rotatedZoom = Math.min(rotatedWidthRatio, rotatedHeightRatio);
+
+          // Choose rotation that gives better zoom (larger image)
+          if (rotatedZoom > normalZoom * 1.1) {
+            shouldRotate = true;
+            currentZoom = rotatedZoom;
+          } else {
+            currentZoom = normalZoom;
+          }
+          break;
+        }
         case FitMode.ACTUAL_SIZE:
           currentZoom = 1.0;
           break;
@@ -208,8 +287,13 @@ const ImageViewer: React.FC<ImageViewerProps> = () => {
       currentZoom = zoomLevel;
     }
 
-    const imageWidth = image.width * currentZoom;
-    const imageHeight = image.height * currentZoom;
+    // Calculate image dimensions (swap if rotated)
+    const imageWidth = shouldRotate
+      ? image.height * currentZoom
+      : image.width * currentZoom;
+    const imageHeight = shouldRotate
+      ? image.width * currentZoom
+      : image.height * currentZoom;
 
     // Calculate centered position
     const centeredX = (containerWidth - imageWidth) / 2;
@@ -318,6 +402,33 @@ const ImageViewer: React.FC<ImageViewerProps> = () => {
   const stageWidth = containerSize.width || 800;
   const stageHeight = containerSize.height || 600;
 
+  // Calculate rotation-aware image positioning
+  const getImageProps = () => {
+    if (!image) return { x: 0, y: 0, rotation: 0, offsetX: 0, offsetY: 0 };
+
+    if (autoRotation === -90) {
+      // For -90° rotation (counter-clockwise)
+      // Rotate around the top-right corner to align to top-left after rotation
+      return {
+        x: 0,
+        y: 0,
+        rotation: -90,
+        offsetX: image.width, // Rotate around right edge
+        offsetY: 0,           // Top edge
+      };
+    }
+
+    return {
+      x: 0,
+      y: 0,
+      rotation: 0,
+      offsetX: 0,
+      offsetY: 0,
+    };
+  };
+
+  const imageProps = getImageProps();
+
   return (
     <div
       ref={containerRef}
@@ -342,10 +453,13 @@ const ImageViewer: React.FC<ImageViewerProps> = () => {
         <Layer>
           <KonvaImage
             image={image}
-            x={0}
-            y={0}
+            x={imageProps.x}
+            y={imageProps.y}
             scaleX={effectiveZoom}
             scaleY={effectiveZoom}
+            rotation={imageProps.rotation}
+            offsetX={imageProps.offsetX}
+            offsetY={imageProps.offsetY}
           />
         </Layer>
       </Stage>

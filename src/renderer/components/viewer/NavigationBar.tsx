@@ -26,7 +26,7 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
   const autoSlideOverlay = useViewerStore(state => state.autoSlideIntervalOverlay);
   const showSlideshowManager = useViewerStore(state => state.showSlideshowManager);
   const toggleSlideshowManager = useViewerStore(state => state.toggleSlideshowManager);
-  const showAutoSlideOverlay = useViewerStore(state => state.showAutoSlideOverlay);
+  const setAutoSlideIntervalOverlay = useViewerStore(state => state.setAutoSlideIntervalOverlay);
 
   const totalPages = images.length;
   const currentPage = currentPageIndex + 1; // Display 1-based index
@@ -66,6 +66,14 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
     setFitMode(FitMode.FIT_HEIGHT);
   };
 
+  const handleFitBest = () => {
+    setFitMode(FitMode.FIT_BEST);
+  };
+
+  const handleFitBestAutoRotate = () => {
+    setFitMode(FitMode.FIT_BEST_AUTO_ROTATE);
+  };
+
   const handleToggleAppFullscreen = () => {
     window.electronAPI.send('window-toggle-fullscreen');
   };
@@ -77,7 +85,7 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
   const handleAutoSlideIntervalChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const value = Number(event.target.value);
     setAutoSlideInterval(value);
-    showAutoSlideOverlay(value);
+    setAutoSlideIntervalOverlay({ visible: true, value });
   };
 
   if (!currentSource) {
@@ -128,11 +136,11 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
           >
             −
           </button>
-          
+
           <span className="zoom-level">
             {fitMode !== FitMode.CUSTOM ? 'Auto' : Math.round(zoomLevel * 100) + '%'}
           </span>
-          
+
           <button
             onClick={handleZoomIn}
             className="zoom-button"
@@ -140,7 +148,7 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
           >
             +
           </button>
-          
+
           <button
             onClick={handleResetZoom}
             className="zoom-button reset"
@@ -154,25 +162,41 @@ const NavigationBar: React.FC<NavigationBarProps> = ({ className }) => {
           <button
             onClick={handleActualSize}
             className={`fit-button ${fitMode === FitMode.ACTUAL_SIZE ? 'active' : ''}`}
-            title="Actual Size"
+            title="Actual Size (O)"
           >
             🔍
           </button>
-          
+
           <button
             onClick={handleFitWidth}
             className={`fit-button ${fitMode === FitMode.FIT_WIDTH ? 'active' : ''}`}
-            title="Fit Width"
+            title="Fit Width (W)"
           >
             ↔
           </button>
-          
+
           <button
             onClick={handleFitHeight}
             className={`fit-button ${fitMode === FitMode.FIT_HEIGHT ? 'active' : ''}`}
-            title="Fit Height"
+            title="Fit Height (H)"
           >
             ↕
+          </button>
+
+          <button
+            onClick={handleFitBest}
+            className={`fit-button ${fitMode === FitMode.FIT_BEST ? 'active' : ''}`}
+            title="Fit to Screen (F)"
+          >
+            ⛶
+          </button>
+
+          <button
+            onClick={handleFitBestAutoRotate}
+            className={`fit-button ${fitMode === FitMode.FIT_BEST_AUTO_ROTATE ? 'active' : ''}`}
+            title="Fit to Screen with Auto Rotation (Shift+F)"
+          >
+            🔄⛶
           </button>
         </div>
 
