@@ -42,7 +42,8 @@ const SlideshowManagerPanel: React.FC = () => {
   const setSlideshowQueueLoading = useViewerStore(state => state.setSlideshowQueueLoading);
 
   const [savedSlideshows, setSavedSlideshows] = useState<Slideshow[]>([]);
-  const [selectedSlideshowId, setSelectedSlideshowId] = useState<string>('');
+  // Remove local state, rely on activeSlideshowId from store
+  // const [selectedSlideshowId, setSelectedSlideshowId] = useState<string>('');
   const [status, setStatus] = useState<StatusState>(null);
   const autoSaveTimeout = useRef<NodeJS.Timeout | null>(null);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -166,35 +167,36 @@ const SlideshowManagerPanel: React.FC = () => {
     slideshowQueueLoading,
   ]);
 
-  const handleLoad = useCallback(async (slideshowId?: string) => {
-    const targetId = slideshowId ?? selectedSlideshowId;
-    if (!targetId) {
+  const handleLoad = useCallback(async (slideshowId: string) => {
+    if (!slideshowId) {
       return;
     }
     setSlideshowQueueLoading(true);
     try {
-      const result = await ipcClient.getSlideshow(targetId) as SlideshowWithEntriesResult | null;
+      const result = await ipcClient.getSlideshow(slideshowId) as SlideshowWithEntriesResult | null;
       if (!result) {
         setStatus({ type: 'error', message: 'Selected slideshow could not be loaded.' });
         return;
       }
+
+      setActiveSlideshowId(result.slideshow.id);
+      setQueueName(result.slideshow.name);
       setSlideshowQueueFromSources(
-        result.entries.map((entry) => ({
+        result.entries.map(entry => ({
           sourcePath: entry.sourcePath,
           sourceType: entry.sourceType,
           label: entry.label,
         })),
         { name: result.slideshow.name, activeSlideshowId: result.slideshow.id, autoStart: true }
       );
-      setQueueName(result.slideshow.name);
-      setActiveSlideshowId(result.slideshow.id);
-      setStatus({ type: 'success', message: `Loaded "${result.slideshow.name}" and started playback.` });
+      setStatus({ type: 'success', message: 'Slideshow loaded successfully.' });
     } catch (error: any) {
+      console.error('Failed to load slideshow:', error);
       setStatus({ type: 'error', message: error?.message || 'Failed to load slideshow.' });
     } finally {
       setSlideshowQueueLoading(false);
     }
-  }, [selectedSlideshowId, setActiveSlideshowId, setQueueName, setSlideshowQueueFromSources, setSlideshowQueueLoading]);
+  }, [setActiveSlideshowId, setQueueName, setSlideshowQueueFromSources, setSlideshowQueueLoading]);
 
   const handleStartAt = useCallback(
     (entryId: string) => {
@@ -256,9 +258,8 @@ const SlideshowManagerPanel: React.FC = () => {
       <section className="slideshow-queue-panel">
         <SlideshowControls
           savedSlideshows={savedSlideshows}
-          selectedSlideshowId={selectedSlideshowId}
+          selectedSlideshowId={activeSlideshowId || ''}
           onSelectSlideshow={(id) => {
-            setSelectedSlideshowId(id);
             if (id) void handleLoad(id);
           }}
           onBeginRename={beginRename}

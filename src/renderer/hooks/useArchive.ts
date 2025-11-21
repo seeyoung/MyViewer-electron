@@ -25,14 +25,17 @@ export function useArchive() {
   const setError = useViewerStore(state => state.setError);
 
   const setSlideshowRoot = useViewerStore(state => state.setSlideshowRoot);
-  const { startSlideshowFromRoot } = useSlideshowManager();
+  const clearSlideshowQueue = useViewerStore(state => state.clearSlideshowQueue);
+  const setCurrentSlidePath = useViewerStore(state => state.setCurrentSlidePath);
 
   const openArchive = useCallback(async (filePath: string, options?: ArchiveOpenOptions) => {
     const { password, userOpen = true } = options ?? {};
-    setIsOpening(true);
-    setError(null);
+    if (isOpening) return;
 
     try {
+      setIsOpening(true);
+      setError(null);
+
       // Open archive via IPC
       const result = await ipcClient.invoke<any>(channels.ARCHIVE_OPEN, {
         filePath,
@@ -40,6 +43,10 @@ export function useArchive() {
       });
 
       const { archive, session, images } = result;
+
+      if (!archive) {
+        throw new Error('Failed to open archive');
+      }
 
       console.log('📦 Archive opened successfully:', {
         archiveId: archive.id,
@@ -75,11 +82,17 @@ export function useArchive() {
         ipcClient.invoke(channels.RECENT_SOURCES_ADD, descriptor).catch((error) => {
           console.error('Failed to persist recent source', error);
         });
-      }
 
-      if (userOpen) {
-        startSlideshowFromRoot(descriptor, undefined, false);
+        // For user open:
+        // 1. Clear existing slideshow queue (resets select box)
+        // 2. Set new root
+        // 3. Update current slide path to prevent reverting to previous slide
+        clearSlideshowQueue();
+        setSlideshowRoot(descriptor);
+        setCurrentSlidePath(descriptor.path);
       } else {
+        // For slideshow navigation:
+        // Just update the root, preserve the queue
         setSlideshowRoot(descriptor);
       }
 
@@ -98,19 +111,25 @@ export function useArchive() {
     } finally {
       setIsOpening(false);
     }
-  }, [addRecentSource, loadFolderPositions, navigateToPage, setError, setImages, setSession, setSource, setSlideshowRoot, startSlideshowFromRoot]);
+  }, [addRecentSource, clearSlideshowQueue, loadFolderPositions, navigateToPage, setCurrentSlidePath, setError, setImages, setSession, setSource, setSlideshowRoot]);
 
   const openFolder = useCallback(async (folderPath: string, options?: FolderOpenOptions) => {
     const { userOpen = true } = options ?? {};
-    setIsOpening(true);
-    setError(null);
+    if (isOpening) return;
 
     try {
+      setIsOpening(true);
+      setError(null);
+
       const result = await ipcClient.invoke<any>(channels.FOLDER_OPEN, {
         folderPath,
       });
 
       const { source, session, images } = result;
+
+      if (!source) {
+        throw new Error('Failed to open folder');
+      }
 
       setSource(source);
       loadFolderPositions();
@@ -122,11 +141,17 @@ export function useArchive() {
         ipcClient.invoke(channels.RECENT_SOURCES_ADD, source).catch((error) => {
           console.error('Failed to persist recent source', error);
         });
-      }
 
-      if (userOpen) {
-        startSlideshowFromRoot(source, undefined, false);
+        // For user open:
+        // 1. Clear existing slideshow queue (resets select box)
+        // 2. Set new root
+        // 3. Update current slide path to prevent reverting to previous slide
+        clearSlideshowQueue();
+        setSlideshowRoot(source);
+        setCurrentSlidePath(source.path);
       } else {
+        // For slideshow navigation:
+        // Just update the root, preserve the queue
         setSlideshowRoot(source);
       }
 
@@ -144,7 +169,7 @@ export function useArchive() {
     } finally {
       setIsOpening(false);
     }
-  }, [addRecentSource, loadFolderPositions, navigateToPage, setError, setImages, setSession, setSource, setSlideshowRoot, startSlideshowFromRoot]);
+  }, [addRecentSource, clearSlideshowQueue, loadFolderPositions, navigateToPage, setCurrentSlidePath, setError, setImages, setSession, setSource, setSlideshowRoot]);
 
   const closeArchive = useCallback(async (archiveId: string) => {
     try {
